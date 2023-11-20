@@ -1,5 +1,5 @@
 # DisGal
-Brian learns Discontinuous Galerkin (finally)
+I (finally) take the time to learn Discontinuous Galerkin
 
 # Notes
 
