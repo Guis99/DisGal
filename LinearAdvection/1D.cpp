@@ -2,6 +2,9 @@
 #include "..\Dependencies\Eigen\Core"
 #include "..\Dependencies\Eigen\Sparse"
 
+#include <iostream>
+#include <fstream>
+
 typedef Eigen::SparseMatrix<double> SpD;
 // Dynamically-sized matrix of doubles
 typedef Eigen::MatrixXd DD;
@@ -50,19 +53,13 @@ BasicMesh1D CreateMesh(int interpolantOrder, int numElems,
     nodes.reserve(numElems * interpolantOrder + 1);
     for (int i=0; i<numElems; i++) { // iter over elements
         double offset = elemWidth * i;
-        for (int j=0; j<interpolantOrder; j++) { // iter from element left bound
+        for (int j=0; j<interpolantOrder + 1; j++) { // iter from element left bound
             // Calculate pos and push
             node.ID = NID++;
-            node.position = elemIntervals[j] + offset;
+            node.position = Utils::TransformPoint(elemIntervals[j], offset, offset+elemWidth);
             nodes.push_back(node);
         }
     }
-    // Add final node
-    node.ID = NID;
-    node.position = numElems * elemWidth;
-    nodes.push_back(node);
-
-    std::cout<<"verifying element construction"<<std::endl;
 
     std::vector<int> nodeIds; std::vector<int> dofs;
     nodeIds.reserve(interpolantOrder + 1);
@@ -72,40 +69,38 @@ BasicMesh1D CreateMesh(int interpolantOrder, int numElems,
     for (int i=0; i<numElems; i++) {
         elem.ID = EID++;
         for (int j=0; j<interpolantOrder + 1; j++) {
-            std::cout<<i*interpolantOrder + j<<std::endl;
-            nodeIds.push_back(i*interpolantOrder + j);
+            nodeIds.push_back(i*(interpolantOrder+1) + j);
             dofs.push_back(dofId++);
         }
-        elem.nodes = nodeIds;
         elem.dofs = dofs;
         elements.push_back(elem);
-        nodeIds.clear(); dofs.clear();
+        dofs.clear();
     }
 
-    std::cout<<"-----------"<<std::endl;
-    for (auto node : nodes) {
-        std::cout<<node.ID<<std::endl;
-    }
+    // std::cout<<"-----------"<<std::endl;
+    // for (auto node : nodes) {
+    //     std::cout<<node.ID<<std::endl;
+    // }
 
-    std::cout<<mesh.numElems<<std::endl;
-
-    for (auto elem : elements) {
-        std::cout<<elem.ID<<std::endl;
-        for (int i=0; i<interpolantOrder + 1; i++) {
-            std::cout<<elem.nodes[i]<<": "<<elem.dofs[i]<<", ";
-        }
-        std::cout<<std::endl;
-    }
+    // std::cout<<mesh.numElems<<std::endl;
 
     mesh.nodes = nodes;
     mesh.elements = elements;
+
+    // for (auto elem : elements) {
+    //     std::cout<<elem.ID<<std::endl;
+    //     for (int i=0; i<interpolantOrder + 1; i++) {
+    //         std::cout<<elem.dofs[i]<<": "<<mesh.nodes[elem.dofs[i]].position<<", ";
+    //     }
+    //     std::cout<<std::endl;
+    // }
 
     return mesh;
 }
 
 std::vector<double> GetPosOfElemNOdes(BasicMesh1D& mesh, int elem) {
     std::vector<double> out;
-    auto elemNodes = mesh.elements[elem].nodes;
+    auto elemNodes = mesh.elements[elem].dofs;
     out.reserve(mesh.interpolantOrder + 1);
     for (int i=0; i<mesh.interpolantOrder + 1; i++) {
         out.push_back(mesh.nodes[elemNodes[i]].position);
@@ -162,11 +157,10 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
         double Lx = mesh.elemWidth; // Jacobian factors
         // calculate local matrix
         localElemVecMass = massVec*Lx/2;
-        localElemMatK = Ax*weightMat*Ax.transpose();
+        localElemMatK = -Ax*weightMat;
         
         // Get nodes in element
         std::vector<int> dofsInElem = elm.dofs;
-        std::vector<int> nodesInElem = elm.nodes;
         // Generate i,j,v triplets
         for (int j=0; j<numElemNodes; j++) {
             tripletListM.emplace_back(dofsInElem[j], dofsInElem[j], localElemVecMass(j));
@@ -178,12 +172,106 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
 
     // Add contributions from flux terms
     for (auto &elm : mesh.elements) {
-
+        int elmID = elm.ID;
+        int leftVal = elm.dofs[0];
+        auto rightVal = (elm.dofs).back(); 
+        if (elmID == 0) {
+            tripletListK.emplace_back(rightVal, rightVal, 1.0);
+        }
+        else {
+            tripletListK.emplace_back(leftVal, leftVal - 1, -1.0); // left boundary
+            tripletListK.emplace_back(rightVal, rightVal, 1.0); // right boundary
+        }
     }
 
     // Declare and construct sparse matrix from triplets
     MassMatrix.setFromTriplets(tripletListM.begin(), tripletListM.end());
     StiffnessMatrix.setFromTriplets(tripletListK.begin(), tripletListK.end());
+}
+
+void GetExtensionMatrices(BasicMesh1D &inputMesh,
+                                        std::vector<int> &boundaryNodes, 
+                                        std::vector<int> &freeNodes,
+                                        SpD &nullSpace,
+                                        SpD &columnSpace) {
+    int nNodes = (inputMesh.nodes).size();
+
+    std::sort(boundaryNodes.begin(), boundaryNodes.end());
+
+    std::vector<Eigen::Triplet<double>> tripletListNS;
+    std::vector<Eigen::Triplet<double>> tripletListCS;
+    tripletListNS.reserve(boundaryNodes.size());
+    tripletListCS.reserve(freeNodes.size());
+
+    for (int i=0; i<boundaryNodes.size(); i++) {
+        tripletListNS.emplace_back(boundaryNodes[i], i, 1.0);
+    }
+
+    for (int i=0; i<freeNodes.size(); i++) {
+        tripletListCS.emplace_back(freeNodes[i], i, 1.0);
+    }
+    
+    nullSpace.setFromTriplets(tripletListNS.begin(), tripletListNS.end());
+    columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
+}
+
+std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix, 
+                                SpD &MassMatrix, SpD &columnSpace, 
+                                SpD &nullSpace, DvD &boundaryVals, 
+                                DvD &initialCondition,
+                                double timeStep,
+                                int numTimeSteps) {
+    std::cout<<"here1"<<std::endl;
+    SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
+    std::cout<<"here1"<<std::endl;
+    SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
+    std::cout<<"here1"<<std::endl;
+    // Eliminate boundary rows and free columns
+    SpD K12 = columnSpace.transpose() * StiffnessMatrix * nullSpace;
+    std::cout<<"here1"<<std::endl;
+    SpD combinedMats = timeStep * K11 + M11;
+    std::cout<<"here1"<<std::endl;
+    int system_size = combinedMats.rows();
+    std::cout<<"here1"<<std::endl;
+    SpD dummyId(system_size, system_size); 
+    std::cout<<"here1"<<std::endl;
+    std::vector<Eigen::Triplet<double>> tripletListID;
+    std::cout<<"here1"<<std::endl;
+
+    tripletListID.reserve(combinedMats.rows());
+    std::cout<<"here1"<<std::endl;
+
+    for (int i=0; i<combinedMats.rows(); i++) {
+        tripletListID.emplace_back(i, i, 1.0);
+    }
+    
+    std::cout<<"here2"<<std::endl;
+    dummyId.setFromTriplets(tripletListID.begin(), tripletListID.end());
+    std::cout<<"here1"<<std::endl;
+    Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
+    LuSolver.analyzePattern(combinedMats);
+    LuSolver.factorize(combinedMats);
+    std::cout<<"here1"<<std::endl;
+    SpD combinedMatsInv = LuSolver.solve(dummyId);
+
+    std::vector<DvD> out;
+    out.reserve(numTimeSteps);
+    std::cout<<"here1"<<std::endl;
+    std::cout<<"col: "<<columnSpace<<std::endl;
+    std::cout<<"ic: "<<initialCondition;
+    std::cout<<"null"<<nullSpace<<std::endl<<"boundary"<<boundaryVals<<std::endl;
+    out.push_back(columnSpace * initialCondition + nullSpace * boundaryVals);
+    DvD prevState = initialCondition;
+    DvD x;
+
+    // Time-stepping
+    std::cout<<"here1"<<std::endl;
+    for (int i=1; i<numTimeSteps; i++) {
+        x = combinedMatsInv * (M11 * prevState - K12 * boundaryVals);
+        prevState = x;
+        out.push_back(columnSpace * x + nullSpace * boundaryVals);
+    }
+    return out;
 }
 
 int main() {
@@ -198,11 +286,88 @@ int main() {
     std::cin>>deg;
     std::cout<<std::endl;
     double spacing = width / numElem;
+
+    double timeStep;
+    int numTimeSteps;
+
+    std::cout<<"Specify time-step: ";
+    std::cin>>timeStep;
+    std::cout<<std::endl<<"Specify number of time-steps: ";
+    std::cin>>numTimeSteps;
+
+    std::cout<<std::endl<<"Generating mesh"<<std::endl;
     BasicMesh1D mesh = CreateMesh(deg, numElem, spacing);
+    auto nodes = mesh.nodes;
+    int nNodes = nodes.size();
+
+    std::vector<double> ICVec;
+    ICVec.reserve(nNodes - 1);
+
+    double currPos;
+
+    for (int i=1; i<nNodes; i++) {
+        currPos = nodes[i].position;
+        if (currPos<.5) {
+            ICVec.push_back(-16 * currPos * (currPos - .5));
+        }
+        else {
+            ICVec.push_back(0);
+        }
+    }
+
+    Eigen::Map<DvD> InitialCondition(ICVec.data(), nNodes - 1, 1);
+    DvD initialCondition = (DvD)InitialCondition;
+
+    std::vector<int> boundaryNodes = {0};
+    std::vector<int> freeNodes; freeNodes.reserve(nNodes - 1);
+
+    for (int i=1; i<nNodes; i++) {
+        freeNodes.push_back(i);
+    }
 
     int numDofs = numElem * (deg + 1);
+    std::cout<<"Generating system matrices"<<std::endl;
     SpD MassMatrix(numDofs, numDofs); SpD StiffnessMatrix(numDofs, numDofs);
     AssembleSystemMatrices(mesh, MassMatrix, StiffnessMatrix);
+
+    SpD nullSpace(nNodes, boundaryNodes.size());
+    SpD columnSpace(nNodes, freeNodes.size());
+    std::cout<<"Assembling null-orth matrix"<<std::endl;
+    GetExtensionMatrices(mesh, boundaryNodes, freeNodes, nullSpace, columnSpace);
+
+    std::vector<double> oneVal = {0};
+    Eigen::Map<DvD> boundaryValsMap(oneVal.data(), 1,  1);
+    DvD boundaryVals = (DvD) boundaryValsMap;
+
+    std::cout<<"Computing solution"<<std::endl;
+    std::vector<DvD> solns = ComputeTransientSolution(StiffnessMatrix, MassMatrix, 
+                                                        columnSpace, 
+                                                        nullSpace, boundaryVals, 
+                                                        initialCondition, timeStep, numTimeSteps);
+
+    
+    
+    std::vector<double> xPositions;
+    xPositions.reserve(nNodes);
+    for (int i=0; i<nNodes; i++) {
+        xPositions.push_back(nodes[i].position);
+    }
+
+    Eigen::Map<DD> xOffsets(xPositions.data(), nNodes, 1);
+    std::ofstream fileX("xt.txt");
+    std::ofstream fileZ("zt.txt");
+
+    if (fileZ.is_open())
+    {
+        for (auto x : solns) {
+            fileZ << x;
+            fileZ << "\n";
+        }
+    }
+    if (fileX.is_open())
+    {
+        fileX << xOffsets;
+    }
+
     return 0;
 }
-
