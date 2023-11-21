@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+
  
  
 # Creating dataset
@@ -14,12 +16,22 @@ Z = Z.reshape(-1,nx)
 print(Z.shape)
  
 # Creating figure
-fig = plt.figure()
-ax = plt.axes()
+fig, ax = plt.subplots()
+
 # ax.set_zlim([0,1])
 # Creating plot
-ax.plot(x, Z[2])
+line, = ax.plot(x, Z[0, :])
+ax.set_ylim([0,10])
 
- 
-# show plot
+# Function to update the plot in each frame
+def update(frame):
+    line.set_ydata(Z[frame, :])
+    return line,
+
+# Set up the animation
+num_frames = Z.shape[0]
+stepsize = 1000/num_frames
+ani = FuncAnimation(fig, update, frames=num_frames, interval=stepsize/10, blit=True)
+
+# Show the animation
 plt.show()

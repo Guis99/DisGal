@@ -157,7 +157,7 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
         double Lx = mesh.elemWidth; // Jacobian factors
         // calculate local matrix
         localElemVecMass = massVec*Lx/2;
-        localElemMatK = -weightMat*Ax.transpose();
+        localElemMatK = -Ax*weightMat;
         
         // Get nodes in element
         std::vector<int> dofsInElem = elm.dofs;
@@ -221,36 +221,53 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps) {
+    std::cout<<"here1"<<std::endl;
     SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
+    std::cout<<"here1"<<std::endl;
     SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
+    std::cout<<"here1"<<std::endl;
     // Eliminate boundary rows and free columns
     SpD K12 = columnSpace.transpose() * StiffnessMatrix * nullSpace;
-    SpD combinedMats = timeStep * K11 / 2 + M11;
+    std::cout<<"here1"<<std::endl;
+    SpD combinedMats = timeStep * K11 + M11;
+    std::cout<<"here1"<<std::endl;
     int system_size = combinedMats.rows();
+    std::cout<<"here1"<<std::endl;
     SpD dummyId(system_size, system_size); 
+    std::cout<<"here1"<<std::endl;
     std::vector<Eigen::Triplet<double>> tripletListID;
+    std::cout<<"here1"<<std::endl;
 
     tripletListID.reserve(combinedMats.rows());
+    std::cout<<"here1"<<std::endl;
 
     for (int i=0; i<combinedMats.rows(); i++) {
         tripletListID.emplace_back(i, i, 1.0);
     }
     
+    std::cout<<"here2"<<std::endl;
     dummyId.setFromTriplets(tripletListID.begin(), tripletListID.end());
+    std::cout<<"here1"<<std::endl;
     Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
     LuSolver.analyzePattern(combinedMats);
     LuSolver.factorize(combinedMats);
+    std::cout<<"here1"<<std::endl;
     SpD combinedMatsInv = LuSolver.solve(dummyId);
 
     std::vector<DvD> out;
     out.reserve(numTimeSteps);
+    std::cout<<"here1"<<std::endl;
+    std::cout<<"col: "<<columnSpace<<std::endl;
+    std::cout<<"ic: "<<initialCondition;
+    std::cout<<"null"<<nullSpace<<std::endl<<"boundary"<<boundaryVals<<std::endl;
     out.push_back(columnSpace * initialCondition + nullSpace * boundaryVals);
     DvD prevState = initialCondition;
     DvD x;
 
     // Time-stepping
+    std::cout<<"here1"<<std::endl;
     for (int i=1; i<numTimeSteps; i++) {
-        x = combinedMatsInv * (M11 * prevState - timeStep * K11 * prevState / 2);
+        x = combinedMatsInv * (M11 * prevState - timeStep * K12 * boundaryVals);
         prevState = x;
         out.push_back(columnSpace * x + nullSpace * boundaryVals);
     }
