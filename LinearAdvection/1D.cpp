@@ -279,19 +279,19 @@ int main() {
     auto nodes = mesh.nodes;
     int nNodes = nodes.size();
 
-    std::vector<double> ICVec;
+    int stopIdx = 1;
+    std::vector<double> x;
+
+    while (nodes[stopIdx].position <= .5) {
+        x.push_back(nodes[stopIdx++].position); 
+    }
+
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    std::vector<double> ICVec = Utils::EvalSymbolicBC(x.data(), stopIdx, "Specify initial condition");
     ICVec.reserve(nNodes - 1);
 
-    double currPos;
-
-    for (int i=1; i<nNodes; i++) {
-        currPos = nodes[i].position;
-        if (currPos<.5) {
-            ICVec.push_back(pow(4,8) * std::pow(currPos,4) * std::pow(currPos - .5,4));
-        }
-        else {
-            ICVec.push_back(0);
-        }
+    for (stopIdx; stopIdx<nNodes; stopIdx++) {
+        ICVec.push_back(0);
     }
 
     Eigen::Map<DvD> InitialCondition(ICVec.data(), nNodes - 1, 1);
