@@ -157,7 +157,7 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
         double Lx = mesh.elemWidth; // Jacobian factors
         // calculate local matrix
         localElemVecMass = massVec*Lx/2;
-        localElemMatK = -weightMat*Ax.transpose();
+        localElemMatK = -Ax.transpose() * weightMat;
         
         // Get nodes in element
         std::vector<int> dofsInElem = elm.dofs;
@@ -172,10 +172,9 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
 
     // Add contributions from flux terms
     for (auto &elm : mesh.elements) {
-        int elmID = elm.ID;
         int leftVal = elm.dofs[0];
-        auto rightVal = (elm.dofs).back(); 
-        if (elmID == 0) {
+        int rightVal = (elm.dofs).back(); 
+        if (elm.ID == 0) {
             tripletListK.emplace_back(rightVal, rightVal, 1.0);
         }
         else {
@@ -260,9 +259,7 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
 int main() {
     int deg;
     int numElem;
-    double width;
-    std::cout<<"Specify domain length: ";
-    std::cin>>width;
+    double width = 2;
     std::cout<<std::endl<<"Specify num elems: ";
     std::cin>>numElem;
     std::cout<<std::endl<<"Specify shape func degree: ";
@@ -273,10 +270,9 @@ int main() {
     double timeStep;
     int numTimeSteps;
 
-    std::cout<<"Specify time-step: ";
-    std::cin>>timeStep;
     std::cout<<std::endl<<"Specify number of time-steps: ";
     std::cin>>numTimeSteps;
+    timeStep = 1.75 / numTimeSteps;
 
     std::cout<<std::endl<<"Generating mesh"<<std::endl;
     BasicMesh1D mesh = CreateMesh(deg, numElem, spacing);
@@ -291,7 +287,7 @@ int main() {
     for (int i=1; i<nNodes; i++) {
         currPos = nodes[i].position;
         if (currPos<.5) {
-            ICVec.push_back(-16 * currPos * (currPos - .5));
+            ICVec.push_back(pow(4,8) * std::pow(currPos,4) * std::pow(currPos - .5,4));
         }
         else {
             ICVec.push_back(0);

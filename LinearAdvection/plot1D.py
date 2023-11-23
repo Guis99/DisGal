@@ -21,7 +21,8 @@ fig, ax = plt.subplots()
 # ax.set_zlim([0,1])
 # Creating plot
 line, = ax.plot(x, Z[0, :])
-ax.set_ylim([0,10])
+ax.axhline(1)
+ax.set_ylim([-.5,2])
 
 # Function to update the plot in each frame
 def update(frame):
@@ -31,7 +32,7 @@ def update(frame):
 # Set up the animation
 num_frames = Z.shape[0]
 stepsize = 1000/num_frames
-ani = FuncAnimation(fig, update, frames=num_frames, interval=stepsize/10, blit=True)
+ani = FuncAnimation(fig, update, frames=num_frames, interval=stepsize, blit=True)
 
 # Show the animation
 plt.show()
