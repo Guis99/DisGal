@@ -220,14 +220,18 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps) {
+    // Eliminate boundary rows and columns
     SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
     SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
-    // Eliminate boundary rows and free columns
-    SpD K12 = columnSpace.transpose() * StiffnessMatrix * nullSpace;
     SpD combinedMats = timeStep * K11 / 2 + M11;
     int system_size = combinedMats.rows();
     SpD dummyId(system_size, system_size); 
     std::vector<Eigen::Triplet<double>> tripletListID;
+
+    // std::cout<<"CS:"<<std::endl<<columnSpace<<std::endl;
+
+
+    // std::cout<<"combined mat:" <<std::endl<<combinedMats<<std::endl;
 
     tripletListID.reserve(combinedMats.rows());
 
@@ -241,17 +245,18 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
     LuSolver.factorize(combinedMats);
     SpD combinedMatsInv = LuSolver.solve(dummyId);
 
+    // std::cout<<"inverse"<<std::endl<<combinedMatsInv<<std::endl;
+
     std::vector<DvD> out;
-    out.reserve(numTimeSteps);
-    out.push_back(columnSpace * initialCondition + nullSpace * boundaryVals);
+    out.push_back(columnSpace * initialCondition);
     DvD prevState = initialCondition;
     DvD x;
 
     // Time-stepping
     for (int i=1; i<numTimeSteps; i++) {
-        x = combinedMatsInv * (M11 * prevState - timeStep * K11 * prevState / 2);
+        x = combinedMatsInv * (M11 - timeStep * K11 / 2) * prevState;
         prevState = x;
-        out.push_back(columnSpace * x + nullSpace * boundaryVals);
+        out.push_back(columnSpace * x);
     }
     return out;
 }
