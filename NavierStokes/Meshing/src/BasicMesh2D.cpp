@@ -22,6 +22,19 @@ Meshing::BasicMesh::Node::Node(int NID, std::array<double, 2> Position, int nCla
     this->nClass = nClass;
 }
 
+Meshing::BasicMesh::Face::Face(int FID, Meshing::BasicMesh::Node &endPoint1, Meshing::BasicMesh::Node &endPoint2) {
+    this->FID = FID;
+    this->EndPoint1 = endPoint1;
+    this->EndPoint2 = endPoint2;
+
+    auto pos1 = endPoint1.Position;
+    auto pos2 = endPoint2.Position;
+
+    std::array<double, 2> normal = Utils::GetNormalVector(pos1, pos2);
+
+    this->Normal = normal;
+}
+
 Meshing::BasicMesh::BasicMesh2D::BasicMesh2D(int xdeg, int ydeg, 
                     std::vector<double> xdiv, std::vector<double> ydiv, 
                     double xstart, double ystart) {

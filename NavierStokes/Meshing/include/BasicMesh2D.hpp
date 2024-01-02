@@ -25,18 +25,21 @@ namespace Meshing {
                 std::array<double, 2> Position;
                 int nClass;
 
+                Node();
                 Node(int NID, std::array<double, 2> Position, int nClass);
         };
 
         class Face {
             public:
                 int FID;
-                std::vector<int> plusElm;
-                std::vector<int> minusElm;
-                std::array<int, 2> endPoints; // Node label
-                std::array<double, 2> normal;
+                std::vector<int> PlusElm;
+                std::vector<int> MinusElm;
+                Meshing::BasicMesh::Node EndPoint1;
+                Meshing::BasicMesh::Node EndPoint2;
 
-                Face(int FID, std::array<int, 2> endPoints);
+                std::array<double, 2> Normal; // Calculated from endpoints
+
+                Face(int FID, Meshing::BasicMesh::Node &endPoint1, Meshing::BasicMesh::Node &endPoint2);
         };
 
         class BasicMesh2D {
