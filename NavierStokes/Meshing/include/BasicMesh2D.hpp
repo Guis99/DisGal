@@ -1,6 +1,7 @@
 #include "..\..\Utils\Utils.hpp"
 
 #include <array>
+#include <unordered_map>
 
 #ifndef MESH_RECT_2D
 #define MESH_RECT_2D
@@ -34,6 +35,10 @@ namespace Meshing {
                 int FID;
                 std::vector<int> PlusElm;
                 std::vector<int> MinusElm;
+                
+                std::unordered_map<int, std::vector<int>> PlusNodes;
+                std::unordered_map<int, std::vector<int>> MinusNodes;
+                
                 Meshing::BasicMesh::Node EndPoint1;
                 Meshing::BasicMesh::Node EndPoint2;
 
@@ -50,6 +55,8 @@ namespace Meshing {
                 std::vector<double> ydiv;
                 std::vector<Node> Nodes;
                 std::vector<Element> Elements;
+                std::vector<Face> Faces;
+                
                 std::vector<double> xOffsets;
                 std::vector<double> yOffsets;
 

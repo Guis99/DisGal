@@ -86,7 +86,7 @@ Meshing::BasicMesh::BasicMesh2D::BasicMesh2D(int xdeg, int ydeg,
                     pos[0] = transformPoint(xSpacing[ii], ax, bx);
                     pos[1] = transformPoint(ySpacing[jj], ay, by);
 
-                    if (j==0 || j==ydeg + 1 || i==0 || i==xdeg) {
+                    if (j==0 || j==ydeg || i==0 || i==xdeg) {
                         nClass = 1;
                     }
                     else {
@@ -103,6 +103,25 @@ Meshing::BasicMesh::BasicMesh2D::BasicMesh2D(int xdeg, int ydeg,
             EID++;
         }
     }
+
+    for (int i=0; i<nElemX; i++) {
+        double ax = xOffsets[i]; double bx = xOffsets[i+1];
+        Faces.emplace_back(i, Nodes[i*nElemX], Nodes[(i+1)*nElemX]);
+    }
+
+    int yID = 0;
+    for (int j=0; j<nElemY; j++) {
+
+    }
+
+    NID = 0;
+    for (int j=0; j<nElemX; j++) {
+        for (int i=0; i<nElemY; i++) { // loop over elements
+            
+            
+        }
+    }
+
 }
 
 
