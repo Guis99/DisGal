@@ -96,7 +96,23 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k) {
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
 
     auto leaves = mesh.GetAllCells();
+    std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
+                                                QTM::Direction::S, QTM::Direction::W};
     for (auto &elm : leaves) {
+        // get neighbors
+        for (auto dir : directions) {
+            auto neighbors = elm->getNeighbor(dir);
+            auto elemNodes = mesh.GetBoundaryNodes(dir, elm->CID);
+            for (auto neighbor : neighbors) {
+                if (neighbor->CID > elm->CID) {
+                    continue;
+                } else if (neighbor->CID == -1) {
+                    continue;
+                } else {
+
+                }
+            }
+        }
         // calculate local matrix
     }
 }
