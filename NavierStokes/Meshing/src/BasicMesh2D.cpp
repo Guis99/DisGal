@@ -105,14 +105,14 @@ Meshing::BasicMesh::BasicMesh2D::BasicMesh2D(int xdeg, int ydeg,
     }
 
     for (int i=0; i<nElemX; i++) {
-        double ax = xOffsets[i]; double bx = xOffsets[i+1];
-        Faces.emplace_back(i, Nodes[i*nElemX], Nodes[(i+1)*nElemX]);
+        Faces.emplace_back(i, Nodes[i*(xdeg+1)], Nodes[(i+1)*(xdeg+1)]);
     }
 
     int yID = 0;
     for (int j=0; j<nElemY; j++) {
-
+        
     }
+
 
     NID = 0;
     for (int j=0; j<nElemX; j++) {
