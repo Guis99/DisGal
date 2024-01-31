@@ -93,7 +93,14 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
     int numElemNodes = numNodes * numNodes;
     int nElements = mesh.numLeaves;
     int nNodes = nElements * numNodes;
+
+    // get quad weights in 1D
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+
+    // Convert 1D quad weights to diag matrix
+    Eigen::Map<DvD> integXMat(integX.data(),numNodes);
+    DD quadWeights1D = (DD)integXMat.asDiagonal();
 
     auto leaves = mesh.GetAllCells();
     std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
@@ -103,35 +110,54 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
     int cellSign; int neighborSign;
     double a; // penalty parameters
 
-    std::vector<Eigen::Triplet<double>> tripletList;    
+    std::vector<int> boundaryNodes;
+    std::vector<int> neighborNodes;
+    std::vector<int> elemNodes;
+    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
     for (auto &elm : leaves) {
         // get neighbors
         for (auto dir : directions) {
             cellSign = edgeSign[dir]; neighborSign = -cellSign;
-            auto neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            auto elemNodes = mesh.GetBoundaryNodes(dir, elm->CID);
-            for (auto neighbor : neighbors) {
-                if (neighbor->CID > elm->CID) {
+            neighbors = mesh.GetCellNeighbors(dir, elm->CID);
+            elemNodes = mesh.GetBoundaryNodes(dir, elm->CID);
+            for (auto neighbor : neighbors) { 
+                if (neighbor == nullptr) { // case curr boundary is exterior
                     continue;
-                } else if (neighbor->CID == -1) { // case curr boundary is exterior
-                    continue;
-                } else { // neighbor exists
-                    auto neighborNodes = mesh.GetBoundaryNodes((QTM::Direction)((dir+2)%4), neighbor->CID);
-                    DD localElemMat(elemNodes.size() + neighborNodes.size(), elemNodes.size() + neighborNodes.size());
+                } else if (neighbor->CID > elm->CID) { // wrong side of boundary
+                    
+                } else { // neighbor exists 
+                    neighborNodes = mesh.GetBoundaryNodes((QTM::Direction)((dir+2)%4), neighbor->CID);
                     // calculate penalty param
                     a = alpha/std::min(elm->width, neighbor->width)/2;
-                    elemNodes.insert(elemNodes.end(), neighborNodes.begin(), neighborNodes.end());
+                    // calculate jump matrix
+                    DD jumpMatrix(elemNodes.size() + neighborNodes.size(), elemNodes.size());
 
-                    for (int j=0; j<elemNodes.size(); j++) {
-                        for (int i=0; i<elemNodes.size(); i++) {
-                            tripletList.emplace_back(elemNodes[i],elemNodes[j],localElemMat(i,j));
+
+                    // TODO
+
+                    DD jumpMatrixT = (DD)jumpMatrix.transpose();
+
+
+                    boundaryNodes.reserve(elemNodes.size() + neighborNodes.size());
+                    boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
+                    boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
+
+                    DD localElemMat(elemNodes.size() + neighborNodes.size(), elemNodes.size() + neighborNodes.size());
+                    localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * jumpMatrixT);
+
+                    for (int j=0; j<boundaryNodes.size(); j++) {
+                        for (int i=0; i<boundaryNodes.size(); i++) {
+                            if (localElemMat(i,j) != 0) {
+                            tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                            }
                         }
                     }
                     
                 }
+                boundaryNodes.clear();
             }
         }
-        // calculate local matrix
     }
 }
 
@@ -142,7 +168,14 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
     int nElements = mesh.numLeaves;
     int nNodes = nElements * numNodes;
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
-    auto leaves = mesh.GetAllCells();
+
+    // get quad weights in 1D
+    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+
+    // Convert 1D quad weights to diag matrix
+    Eigen::Map<DvD> integXMat(integX.data(),numNodes);
+    DD quadWeights1D = (DD)integXMat.asDiagonal();
 
     // Generate derivative matrix
     std::vector<double> AInitializer; 
@@ -157,8 +190,64 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
         AInitIdx += numNodes;
     }
 
+    // Signs for element edges
+    int edgeSign[4] = {1,1,-1-1};
+    int cellSign; int neighborSign;
+
+    std::vector<int> boundaryNodes;
+    std::vector<int> neighborNodes;
+    std::vector<int> elemNodes;
+    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    auto leaves = mesh.GetAllCells();
+    std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
+                                                QTM::Direction::S, QTM::Direction::W};
     for (auto &elm : leaves) {
-        // calculate local matrix
+        // get neighbors
+        for (auto dir : directions) {
+            cellSign = edgeSign[dir]; neighborSign = -cellSign;
+            neighbors = mesh.GetCellNeighbors(dir, elm->CID);
+            elemNodes = mesh.GetBoundaryNodes(dir, elm->CID);
+            for (auto neighbor : neighbors) { 
+                if (neighbor == nullptr) { // case curr boundary is exterior
+                    continue;
+                } else if (neighbor->CID > elm->CID) { // wrong side of boundary
+                    
+                } else { // neighbor exists 
+                    neighborNodes = mesh.GetBoundaryNodes((QTM::Direction)((dir+2)%4), neighbor->CID);
+                    // calculate jump matrix
+                    DD jumpMatrix(elemNodes.size() + neighborNodes.size(), elemNodes.size());
+
+                    // TODO
+
+
+                    // calculate flux matrix
+                    DD fluxMatrixX(elemNodes.size(), elemNodes.size() + neighborNodes.size());
+                    DD fluxMatrixY(elemNodes.size(), elemNodes.size() + neighborNodes.size());
+
+                    // TODO
+
+                    boundaryNodes.reserve(elemNodes.size() + neighborNodes.size());
+                    boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
+                    boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
+
+                    // assemble local matrix
+                    DD localElemMat(elemNodes.size() + neighborNodes.size(), elemNodes.size() + neighborNodes.size());
+                    localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * fluxMatrixX + 
+                                        jumpMatrix * elm->width*quadWeights1D * fluxMatrixY);
+
+                    for (int j=0; j<boundaryNodes.size(); j++) {
+                        for (int i=0; i<boundaryNodes.size(); i++) {
+                            if (localElemMat(i,j) != 0) {
+                            tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                            }
+                        }
+                    }
+                    
+                }
+                boundaryNodes.clear();
+            }
+        }
     }
 }
 
@@ -212,3 +301,20 @@ SpD AssembleFVec(QTM::QuadTreeMesh mesh, double f, std::string evalStr) {
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
     return mat;
 }
+
+double ComputeResidual() {
+
+}
+
+std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD &solution, QTM::QuadTreeMesh& mesh, double residualLimit) {
+    std::vector<std::shared_ptr<QTM::Cell>> out; out.reserve(mesh.leaves.size());
+    for (auto leaf : mesh.leaves) {
+        double res = ComputeResidual();
+        if (leaf->level < 5 && ComputeResidual() > residualLimit) {
+             out.push_back(leaf);
+        }
+    }
+
+    return out;
+}
+
