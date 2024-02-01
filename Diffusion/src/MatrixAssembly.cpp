@@ -138,20 +138,17 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
                     // calculate penalty param
                     a = alpha/std::min(elm->width, neighbor->width)/2;
                     // calculate jump matrix
-
                     DD topJump = cellSign*B(Eigen::all, localNodes[dir]);
                     DD bottomJump = neighborSign*B(Eigen::all, localNodes[(QTM::Direction)((dir+2)%4)]);
                     DD jumpMatrix(2*numElemNodes, elemNodes.size());
                     jumpMatrix << topJump, bottomJump;
 
-                    auto jumpMatrixT = (DD)jumpMatrix.transpose();
-
                     boundaryNodes.reserve(elemNodes.size() + neighborNodes.size());
                     boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
                     boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
-                    DD localElemMat(elemNodes.size() + neighborNodes.size(), elemNodes.size() + neighborNodes.size());
-                    localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * jumpMatrixT);
+                    auto jumpMatrixT = (DD)jumpMatrix.transpose();
+                    DD localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * jumpMatrixT);
 
                     for (int j=0; j<boundaryNodes.size(); j++) {
                         for (int i=0; i<boundaryNodes.size(); i++) {
@@ -159,8 +156,7 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
                                 tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
                             }
                         }
-                    }
-                    
+                    }    
                 }
                 boundaryNodes.clear();
             }
@@ -192,9 +188,6 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
     AInitializer.reserve(numElemNodes * numElemNodes);
 
     double *AInitIdx = AInitializer.data(); 
-    
-    // map derivative values to matrix
-    Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
 
     // Generate derivatives for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
@@ -202,6 +195,15 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
         std::copy(xPartials.begin(), xPartials.end(), AInitIdx);
         AInitIdx += numNodes;
     }
+    
+    // map derivative values to matrix
+    Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
+
+    // Get element-wise matrix intermediates
+    DD combinedX(numElemNodes, numElemNodes);
+    combinedX << Eigen::kroneckerProduct(B, A);
+    DD combinedY(numElemNodes, numElemNodes);
+    combinedY << Eigen::kroneckerProduct(A, B);
 
     // Signs for element edges
     int edgeSign[4] = {1,1,-1-1};
@@ -215,6 +217,11 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
     auto leaves = mesh.GetAllCells();
     std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
                                                 QTM::Direction::S, QTM::Direction::W};
+
+    std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::E),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::S),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
     for (auto &elm : leaves) {
         // get neighbors
         for (auto dir : directions) {
@@ -229,24 +236,30 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
                 } else { // neighbor exists 
                     neighborNodes = mesh.GetBoundaryNodes((QTM::Direction)((dir+2)%4), neighbor->CID);
                     // calculate jump matrix
-                    DD jumpMatrix(elemNodes.size() + neighborNodes.size(), elemNodes.size());
-
-                    // TODO
-
+                    DD topJump = cellSign*B(Eigen::all, localNodes[dir]);
+                    DD bottomJump = neighborSign*B(Eigen::all, localNodes[(QTM::Direction)((dir+2)%4)]);
+                    DD jumpMatrix(2*numElemNodes, elemNodes.size());
+                    jumpMatrix << topJump, bottomJump;
 
                     // calculate flux matrix
-                    DD fluxMatrixX(elemNodes.size(), elemNodes.size() + neighborNodes.size());
-                    DD fluxMatrixY(elemNodes.size(), elemNodes.size() + neighborNodes.size());
+                    DD topGradX = cellSign*combinedX(localNodes[dir], Eigen::all);
+                    DD bottomGradX = neighborSign*combinedX(localNodes[(QTM::Direction)((dir+2)%4)], Eigen::all );
 
-                    // TODO
+                    DD topGradY = cellSign*combinedY(Eigen::all, localNodes[dir]);
+                    DD bottomGradY = neighborSign*combinedY(Eigen::all, localNodes[(QTM::Direction)((dir+2)%4)]);
+
+                    DD fluxMatrixX(elemNodes.size(), 2*numElemNodes);
+                    DD fluxMatrixY(elemNodes.size(), 2*numElemNodes);
+
+                    fluxMatrixX << topGradX, bottomGradX;
+                    fluxMatrixY << topGradY, bottomGradY;
 
                     boundaryNodes.reserve(elemNodes.size() + neighborNodes.size());
                     boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
                     boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                     // assemble local matrix
-                    DD localElemMat(elemNodes.size() + neighborNodes.size(), elemNodes.size() + neighborNodes.size());
-                    localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * fluxMatrixX + 
+                    DD localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * fluxMatrixX + 
                                         jumpMatrix * elm->width*quadWeights1D * fluxMatrixY);
 
                     for (int j=0; j<boundaryNodes.size(); j++) {
@@ -256,7 +269,6 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
                             }
                         }
                     }
-                    
                 }
                 boundaryNodes.clear();
             }

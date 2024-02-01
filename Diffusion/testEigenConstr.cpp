@@ -33,7 +33,7 @@ int main() {
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
 
-    Direction dir = Direction::N;
+    Direction dir = Direction::E;
 
     std::vector<int> neighborNodes;
     std::vector<int> elemNodes;
@@ -58,7 +58,7 @@ int main() {
 
     auto jumpMatrixT = jumpMatrix.transpose();
 
-    DD localElemMat(elemNodes.size() + neighborNodes.size(), elemNodes.size() + neighborNodes.size());
+    DD localElemMat(2*numElemNodes, 2*numElemNodes);
     localElemMat = (DD)(jumpMatrix * quadWeights1D * jumpMatrixT);
 
     std::cout<<"printing quadWeights1D:"<<std::endl;
@@ -66,4 +66,66 @@ int main() {
 
     std::cout<<"printing localElemMat:"<<std::endl;
     std::cout<<localElemMat<<std::endl;
+
+    // Generate derivative matrix
+    std::vector<double> AInitializer; 
+    AInitializer.reserve(numElemNodes * numElemNodes);
+
+    double *AInitIdx = AInitializer.data(); 
+
+    // Generate derivatives for each basis function, copy to full array
+    for (int k=0; k<numNodes; k++) { 
+        std::vector<double> xPartials = Utils::numDeriv(.00001, k, gaussPoints, gaussPoints);
+        std::copy(xPartials.begin(), xPartials.end(), AInitIdx);
+        AInitIdx += numNodes;
+    }
+
+    AInitializer = {1,2,3,4,5,6,7,8,9};
+    
+    // map derivative values to matrix
+    Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
+
+    DD Bs; Bs.setIdentity(numNodes, numNodes);
+
+    // Get element-wise matrix intermediates
+    DD combinedX(numElemNodes, numElemNodes);
+    combinedX << Eigen::kroneckerProduct(Bs, A);
+    DD combinedY(numElemNodes, numElemNodes);
+    combinedY << Eigen::kroneckerProduct(A, Bs);
+
+    std::cout<<"printing combinedX:"<<std::endl;
+    std::cout<<combinedX<<std::endl;
+
+    std::cout<<"printing combinedY:"<<std::endl;
+    std::cout<<combinedY<<std::endl;
+
+    DD topGradX = combinedX(localNodes[dir], Eigen::all);
+    DD bottomGradX = -combinedX(localNodes[(QTM::Direction)((dir+2)%4)], Eigen::all);
+
+    std::cout<<"printing topGradX:"<<std::endl;
+    std::cout<<topGradX<<std::endl;
+
+    std::cout<<"printing bottomGradX:"<<std::endl;
+    std::cout<<bottomGradX<<std::endl;
+
+    DD topGradY = combinedY(localNodes[dir], Eigen::all);
+    DD bottomGradY = -combinedY(localNodes[(QTM::Direction)((dir+2)%4)], Eigen::all);
+
+    std::cout<<"printing topGradY:"<<std::endl;
+    std::cout<<topGradY<<std::endl;
+
+    std::cout<<"printing bottomGradY:"<<std::endl;
+    std::cout<<bottomGradY<<std::endl;
+
+    DD fluxMatrixX(elemNodes.size(), 2*numElemNodes);
+    DD fluxMatrixY(elemNodes.size(), 2*numElemNodes);
+
+    fluxMatrixX << topGradX, bottomGradX;
+    fluxMatrixY << topGradY, bottomGradY; 
+
+    std::cout<<"printing fluxMatrixX:"<<std::endl;
+    std::cout<<fluxMatrixX<<std::endl;
+
+    std::cout<<"printing fluxMatrixY:"<<std::endl;
+    std::cout<<fluxMatrixY<<std::endl;
 }
