@@ -37,7 +37,6 @@ SpD StiffnessMatrix(QTM::QuadTreeMesh mesh, double k) {
         AInitIdx += numNodes;
     }
     
-
     // map derivative values to matrix
     Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
 
@@ -102,9 +101,17 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
     Eigen::Map<DvD> integXMat(integX.data(),numNodes);
     DD quadWeights1D = (DD)integXMat.asDiagonal();
 
+    // basis func to node mapping
+    DD B; B.setIdentity(numElemNodes, numElemNodes);
+
     auto leaves = mesh.GetAllCells();
     std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
                                                 QTM::Direction::S, QTM::Direction::W};
+
+    std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::E),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::S),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
     // Signs for element edges
     int edgeSign[4] = {1,1,-1-1};
     int cellSign; int neighborSign;
@@ -131,13 +138,13 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
                     // calculate penalty param
                     a = alpha/std::min(elm->width, neighbor->width)/2;
                     // calculate jump matrix
-                    DD jumpMatrix(elemNodes.size() + neighborNodes.size(), elemNodes.size());
 
+                    DD topJump = cellSign*B(Eigen::all, localNodes[dir]);
+                    DD bottomJump = neighborSign*B(Eigen::all, localNodes[(QTM::Direction)((dir+2)%4)]);
+                    DD jumpMatrix(2*numElemNodes, elemNodes.size());
+                    jumpMatrix << topJump, bottomJump;
 
-                    // TODO
-
-                    DD jumpMatrixT = (DD)jumpMatrix.transpose();
-
+                    auto jumpMatrixT = (DD)jumpMatrix.transpose();
 
                     boundaryNodes.reserve(elemNodes.size() + neighborNodes.size());
                     boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
@@ -149,7 +156,7 @@ DD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
                     for (int j=0; j<boundaryNodes.size(); j++) {
                         for (int i=0; i<boundaryNodes.size(); i++) {
                             if (localElemMat(i,j) != 0) {
-                            tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                                tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
                             }
                         }
                     }
@@ -177,11 +184,17 @@ DD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
     Eigen::Map<DvD> integXMat(integX.data(),numNodes);
     DD quadWeights1D = (DD)integXMat.asDiagonal();
 
+    // basis func to node mapping
+    DD B; B.setIdentity(numElemNodes, numElemNodes);
+
     // Generate derivative matrix
     std::vector<double> AInitializer; 
     AInitializer.reserve(numElemNodes * numElemNodes);
 
     double *AInitIdx = AInitializer.data(); 
+    
+    // map derivative values to matrix
+    Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
 
     // Generate derivatives for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
