@@ -33,16 +33,16 @@ int main() {
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
 
-    Direction dir = Direction::E;
+    Direction dir = Direction::N;
 
     std::vector<int> neighborNodes;
     std::vector<int> elemNodes;
     std::vector<std::shared_ptr<QTM::Cell>> neighbors;
 
-    elemNodes = mesh.GetBoundaryNodes(dir, 4);
+    elemNodes = mesh.GetGlobalBoundaryNodes(dir, 4);
     neighbors = mesh.GetCellNeighbors(dir, 4);
     auto neighbor = neighbors[0];
-    neighborNodes = mesh.GetBoundaryNodes((QTM::Direction)((dir+2)%4), neighbor->CID);
+    neighborNodes = mesh.GetGlobalBoundaryNodes((QTM::Direction)((dir+2)%4), neighbor->CID);
 
     DD topJump = B(Eigen::all, localNodes[dir]);
     DD bottomJump = -B(Eigen::all, localNodes[(QTM::Direction)((dir+2)%4)]);
@@ -128,4 +128,21 @@ int main() {
 
     std::cout<<"printing fluxMatrixY:"<<std::endl;
     std::cout<<fluxMatrixY<<std::endl;
+
+
+    DvD topVec(numNodes); topVec(0) = 1;
+    DvD bottomVec(numNodes); bottomVec(deg) = 1;
+
+    for (int i=0; i<numNodes-1; i++) {
+        topVec(i+1) = 0;
+        bottomVec(i) = 0;
+    }
+    std::cout<<topVec<<std::endl;
+    std::cout<<"print"<<bottomVec<<std::endl;
+
+    DD mat(3,3);
+    mat << 1,2,3,4,5,6,7,8,9;
+    std::cout<<mat<<std::endl;
+    mat<<2,4,6,8,10,12,14,16,18;
+    std::cout<<mat<<std::endl;
 }
