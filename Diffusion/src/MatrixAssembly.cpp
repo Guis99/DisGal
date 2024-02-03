@@ -102,14 +102,9 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
     BhInitializer.reserve(numNodes * numNodes);
 
     // get unit vecs
-    DvD topVec(numNodes); topVec(0) = 1;
-    DvD bottomVec(numNodes); bottomVec(deg) = 1;
+    DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
+    DvD bottomVec = DvD::Zero(numNodes); bottomVec(deg) = 1;
 
-    for (int i=0; i<numNodes-1; i++) {
-        topVec(i+1) = 0;
-        bottomVec(i) = 0;
-    }
-    
     // Generate values for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
         std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
@@ -384,14 +379,14 @@ std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD &solution, QTM::QuadTr
     return out;
 }
 
-DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh &inputMesh, std::vector<int> &boundaryNodes, std::vector<std::string> &strs) {
-    int deg = inputMesh.deg;
-    int numXElems = inputMesh.xOffsets.size()-1; int numYElems = inputMesh.yOffsets.size()-1;
-    int xWidth = deg*numXElems;
-    
-    int numBoundaryNodes = boundaryNodes.size();
+DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh &inputMesh, std::vector<std::vector<int>> &boundaryNodes, std::vector<int> &allBoundaryNodes, std::vector<std::string> &strs) {
+    std::vector<std::array<double,2>> boundaryNodePos;
+    for (auto bNodes : boundaryNodes) {
+        auto nodePos = inputMesh.GetNodePos(bNodes);
+        boundaryNodePos.insert(boundaryNodePos.end(), nodePos.begin(), nodePos.end());
+    }
+    int numBoundaryNodes = allBoundaryNodes.size();
 
-    std::vector<std::array<double,2>> boundaryNodePos = inputMesh.posOfNodes(boundaryNodes);
     // Boundary nodes are given in clockwise order, not column-major order
     std::vector<double> boundaryNodeValues; 
     boundaryNodeValues.resize(numBoundaryNodes);
@@ -403,19 +398,17 @@ DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh &inputMesh, std::vector<int> &bo
     std::string prompt;
 
     for (int i=0; i<4; i++) {
-        // Alternate between x and y-iteration
-        ptrIncr = i % 2 == 0 ? xWidth : yWidth;
-        prompt = strs[i];
+        ptrIncr = boundaryNodes[i].size();
         // Take bcFunc and evaluate it
-        boundaryCalc = Utils::EvalSymbolicBC(currPointer, ptrIncr, prompt);
-        std::copy(boundaryCalc.begin(), boundaryCalc.end(), currNodeValPointer); 
-        currPointer += ptrIncr; currNodeValPointer += ptrIncr;
+        boundaryCalc = Utils::EvalSymbolicBC(currPointer, ptrIncr, strs[i]);
+        boundaryNodeValues.insert(boundaryNodeValues.end(), boundaryCalc.begin(), boundaryCalc.end());
+        currPointer += ptrIncr;
     }
 
-    auto RmOrder = boundaryNodes;
+    auto RmOrder = allBoundaryNodes;
     std::sort(RmOrder.begin(), RmOrder.end());
 
-    auto BcValsSorted = Utils::ReshuffleNodeVals(RmOrder, boundaryNodes, boundaryNodeValues);
+    auto BcValsSorted = Utils::ReshuffleNodeVals(RmOrder, allBoundaryNodes, boundaryNodeValues);
 
     Eigen::Map<DvD> boundaryNodeValuesVec(BcValsSorted.data(), numBoundaryNodes, 1);
     return (DvD)boundaryNodeValuesVec;
@@ -472,9 +465,14 @@ DD PoissonSolve(QTM::QuadTreeMesh &inputMesh,
                 std::string source,
                 std::vector<std::string> bcs) {
     
-    std::vector<int> boundaryNodes = inputMesh.getBoundaryNodes();
-    std::vector<int> freeNodes = inputMesh.getFreeNodes();
+    auto boundaryNodes = inputMesh.boundaryNodes;
+    std::vector<int> freeNodes = inputMesh.freeNodes;
     int nNodes = inputMesh.nNodes();
+
+    std::vector<int> allBoundaryNodes;
+    for (auto bNodes : boundaryNodes) {
+        allBoundaryNodes.insert(allBoundaryNodes.end(), bNodes.begin(), bNodes.end());
+    }
 
     std::cout<<"Assembling stiffness matrix"<<std::endl;
     SpD KMatrix = StiffnessMatrix(inputMesh, k);
@@ -486,15 +484,14 @@ DD PoissonSolve(QTM::QuadTreeMesh &inputMesh,
     std::cout<<"Assembling RHS vector"<<std::endl;
     SpD FMatrix = AssembleFVec(inputMesh, 1.0, source);
     std::cout<<"Assembling boundary condition vector"<<std::endl;
-    DvD boundaryVals = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, bcs);
+    DvD boundaryVals = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, bcs);
 
     SpD nullSpace(nNodes, boundaryNodes.size());
     SpD columnSpace(nNodes, freeNodes.size());
     std::cout<<"Assembling null-orth matrix"<<std::endl;
-    GetExtensionMatrices(inputMesh, boundaryNodes, freeNodes, nullSpace, columnSpace);
+    GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodes, nullSpace, columnSpace);
     std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
     DD x = ComputeSolutionStationary(KMatrix, PMatrix, SMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
     std::cout<<"System solved!"<<std::endl;
     return x;
 }
-

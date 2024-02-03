@@ -130,8 +130,8 @@ int main() {
     std::cout<<fluxMatrixY<<std::endl;
 
 
-    DvD topVec(numNodes); topVec(0) = 1;
-    DvD bottomVec(numNodes); bottomVec(deg) = 1;
+    DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
+    DvD bottomVec = DvD::Zero(numNodes); bottomVec(deg) = 1;
 
     for (int i=0; i<numNodes-1; i++) {
         topVec(i+1) = 0;
@@ -140,9 +140,20 @@ int main() {
     std::cout<<topVec<<std::endl;
     std::cout<<"print"<<bottomVec<<std::endl;
 
+    std::array<DD,2> mv;
     DD mat(3,3);
-    mat << 1,2,3,4,5,6,7,8,9;
-    std::cout<<mat<<std::endl;
-    mat<<2,4,6,8,10,12,14,16,18;
-    std::cout<<mat<<std::endl;
+    mat << 1,2,3,4,5,6,7,8,9; mv[0] = mat;
+    std::cout<<mv[0]<<std::endl;
+    mat<<2,4,6,8,10,12,14,16,18; mv[1] = mat;
+    std::cout<<mv[1]<<std::endl; 
+    mat<<9,8,7,6,5,4,3,2,1;
+    std::cout<<mv[0]<<std::endl<<mv[1]<<std::endl;
+    mat.transposeInPlace();
+
+    auto g=mat.data();
+    for (int i=0; i<9; i++) {
+        std::cout<<*g<<", ";
+        g++;
+    }
+
 }
