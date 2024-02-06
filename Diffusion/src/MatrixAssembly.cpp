@@ -21,7 +21,8 @@ SpD StiffnessMatrix(QTM::QuadTreeMesh mesh, double k) {
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
     int nElements = mesh.numLeaves;
-    int nNodes = nElements * numNodes;
+    int nNodes = mesh.nNodes();
+    
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
 
     // Generate derivative matrix
@@ -36,16 +37,16 @@ SpD StiffnessMatrix(QTM::QuadTreeMesh mesh, double k) {
         std::copy(xPartials.begin(), xPartials.end(), AInitIdx);
         AInitIdx += numNodes;
     }
-    
+    std::cout<<"d1"<<std::endl;
     // map derivative values to matrix
     Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
-
+std::cout<<"d2"<<std::endl;
     // Generate quadrature weight matrices
     DD weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, numNodes, numNodes, numElemNodes);
-
+std::cout<<"d3"<<std::endl;
     // Generate mass matrices
     DD B; B.setIdentity(numNodes, numNodes);
-
+std::cout<<"d4"<<std::endl;
     DD coeffMat(numElemNodes, numElemNodes);
     coeffMat.setIdentity(); coeffMat *= k;
     
@@ -54,21 +55,33 @@ SpD StiffnessMatrix(QTM::QuadTreeMesh mesh, double k) {
     combinedX << Eigen::kroneckerProduct(B, A);
     DD combinedY(numElemNodes, numElemNodes);
     combinedY << Eigen::kroneckerProduct(A, B);
-
+std::cout<<"d5"<<std::endl;
     // Initialize i,j,v triplet list for sparse matrix
     std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(nElements * numElemNodes * numElemNodes);
 
     auto combineXT = (DD)combinedX.transpose();
     auto combineYT = (DD)combinedY.transpose();
+    std::cout<<"d6"<<std::endl;
 
     // Integrate over all elements
     DD localElemMat(numElemNodes, numElemNodes);
     auto leaves = mesh.GetAllCells();
+    std::cout<<"d7"<<std::endl;
     for (auto &elm : leaves) {
         // calculate local matrix
+        std::cout<<elm->CID<<"\n----------------\n";
+        std::cout<<combinedX.rows()<<", "<<combinedX.cols()<<std::endl;
+        std::cout<<combinedY.rows()<<", "<<combinedY.cols()<<std::endl;
+        std::cout<<combineXT.rows()<<", "<<combineXT.cols()<<std::endl;
+        std::cout<<combineYT.rows()<<", "<<combineYT.cols()<<std::endl;
+        std::cout<<coeffMat.rows()<<", "<<coeffMat.cols()<<std::endl;
+        std::cout<<weightMat.rows()<<", "<<weightMat.cols()<<std::endl;
+        
         localElemMat = combineXT*coeffMat*weightMat*combinedX +
                         combineYT*coeffMat*weightMat*combinedY;
+
+        std::cout<<"d8"<<std::endl;
  
         // Get nodes in element
         auto nodeBound = elm->nodes[0];
@@ -79,10 +92,13 @@ SpD StiffnessMatrix(QTM::QuadTreeMesh mesh, double k) {
                 tripletList.emplace_back(nodeBound+i,nodeBound+j,localElemMat(i,j));
             }
         }
+        std::cout<<"d9"<<std::endl;
     }
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
+    std::cout<<"d10"<<std::endl;
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    std::cout<<"d11"<<std::endl;
     return mat;
 }
 
@@ -91,45 +107,53 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
     int nElements = mesh.numLeaves;
-    int nNodes = nElements * numNodes;
+    int nNodes = mesh.nNodes();
 
     // basis func to node mapping
     DD B; B.setIdentity(numElemNodes, numElemNodes);
     DD Bs; Bs.setIdentity(2*numNodes-1, 2*numNodes-1);
+    std::cout<<"db1"<<std::endl;
 
     // get basis func vals for split cell quad
     std::vector<double> BhInitializer; 
     BhInitializer.reserve(numNodes * numNodes);
+    std::cout<<"db1"<<std::endl;
 
     // get unit vecs
     DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
     DvD bottomVec = DvD::Zero(numNodes); bottomVec(deg) = 1;
+    std::cout<<"db1"<<std::endl;
 
     // Generate values for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
         std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
         BhInitializer.insert(BhInitializer.end(), xVals.begin(), xVals.end());
     }
-    
+    std::cout<<"db1"<<std::endl;
     // map basis values to matrix
-    Eigen::Map<DD> Bh(BhInitializer.data(), 2*numNodes-1, numNodes); // eval points are traversed first
-    Bh.transposeInPlace();
+    Eigen::Map<DD> BhT(BhInitializer.data(), 2*numNodes-1, numNodes); // eval points are traversed first
+    DD Bh = (DD)(BhT.transpose());
+    std::cout<<"db1"<<std::endl;
 
     std::array<DD,4> splitCellVals;
+    std::cout<<"db1"<<std::endl;
 
     DD splitCellPlaceholder(numElemNodes, mesh.halfGaussPoints.size());
     splitCellPlaceholder << Eigen::kroneckerProduct(bottomVec, Bh); splitCellVals[0] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, bottomVec); splitCellVals[1] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
+    std::cout<<"db1"<<std::endl;
     
     // get quad weights in 1D
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
     std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+    std::cout<<"db1"<<std::endl;
 
     // Convert 1D quad weights to diag matrix
     Eigen::Map<DvD> integXMat(integX.data(),numNodes);
     DD quadWeights1D = (DD)integXMat.asDiagonal();
+    std::cout<<"db1"<<std::endl;
 
     auto leaves = mesh.GetAllCells();
     std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
@@ -203,11 +227,10 @@ SpD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
     int nElements = mesh.numLeaves;
-    int nNodes = nElements * numNodes;
+    int nNodes = mesh.nNodes();
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
 
     // get quad weights in 1D
-    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
     std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
 
     // Convert 1D quad weights to diag matrix
@@ -230,6 +253,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
     
     // map derivative values to matrix
     Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
+    A = .5*A;
 
     // Get element-wise matrix intermediates
     DD combinedX(numElemNodes, numElemNodes);
@@ -274,15 +298,16 @@ SpD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
                     jumpMatrix << topJump, bottomJump;
 
                     // calculate flux matrix
-                    DD topGradX = cellSign*combinedX(localNodes[dir], Eigen::all);
-                    DD bottomGradX = neighborSign*combinedX(localNodes[(QTM::Direction)((dir+2)%4)], Eigen::all );
+                    DD topGradX = combinedX(localNodes[dir], Eigen::all);
+                    DD bottomGradX = combinedX(localNodes[(QTM::Direction)((dir+2)%4)], Eigen::all );
 
-                    DD topGradY = cellSign*combinedY(localNodes[dir], Eigen::all);
-                    DD bottomGradY = neighborSign*combinedY(localNodes[(QTM::Direction)((dir+2)%4)], Eigen::all);
+                    DD topGradY = combinedY(localNodes[dir], Eigen::all);
+                    DD bottomGradY = combinedY(localNodes[(QTM::Direction)((dir+2)%4)], Eigen::all);
 
                     DD fluxMatrixX(elemNodes.size(), 2*numElemNodes);
                     DD fluxMatrixY(elemNodes.size(), 2*numElemNodes);
 
+                    // place partial derivatives in combined mat
                     fluxMatrixX << topGradX, bottomGradX;
                     fluxMatrixY << topGradY, bottomGradY;
 
@@ -317,33 +342,38 @@ SpD AssembleFVec(QTM::QuadTreeMesh mesh, double f, std::string evalStr) {
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
     int nElements = mesh.numLeaves;
-    int nNodes = nElements * numNodes;
+    int nNodes = mesh.nNodes();
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::cout<<"db2"<<std::endl;
 
     // Generate quadrature weight matrices
     DD weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, numNodes, numNodes, numElemNodes);
+    std::cout<<"db1"<<std::endl;
 
     // Turn weight mat int vector and mult. by source since diagonal
     // DvD sourceVec = f * weightMat.diagonal();
 
     auto allNodesPos = mesh.AllNodePos();
+    std::cout<<"db1"<<std::endl;
     auto startpoint = allNodesPos.data(); auto allocSize = allNodesPos.size();
     auto fEval = Utils::EvalSymbolicBC(startpoint, allocSize, evalStr);
+    std::cout<<"db1"<<std::endl;
 
     // Initialize i,j,v triplet list for sparse matrix
     std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(nElements * numElemNodes);
 
+    std::cout<<"db1"<<std::endl;
     // Integrate over all elements
     DvD localElemMat(numElemNodes);
     auto leaves = mesh.GetAllCells();
+    std::cout<<"db1"<<std::endl;
     for (auto &elm : leaves) {
-        auto nodesInElm = elm->nodes;
         double Lx = elm->width; // Jacobian factors
         // calculate local matrix
         std::vector<double> collectSourceVals; collectSourceVals.reserve(numElemNodes);
-
-        for (int i=nodesInElm[0]; i<=nodesInElm[1]; i++) {
+        auto nodes = elm->nodes;
+        for (int i=nodes[0]; i<=nodes[1]; i++) {
             collectSourceVals.push_back(fEval[i]);
         }
         Eigen::Map<DvD> sourceVector(collectSourceVals.data(), numElemNodes, 1);
@@ -353,7 +383,7 @@ SpD AssembleFVec(QTM::QuadTreeMesh mesh, double f, std::string evalStr) {
         
         // Generate i,j,v triplets
         for (int i=0; i<numElemNodes; i++) {
-            tripletList.emplace_back(nodesInElm[i], 0, localElemMat(i));
+            tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
         }  
     }
 
@@ -421,29 +451,41 @@ void GetExtensionMatrices(QTM::QuadTreeMesh &inputMesh,
                                         SpD &columnSpace) {
     int nNodes = inputMesh.nNodes();
 
+    std::cout<<"db1"<<std::endl;
+
     std::sort(boundaryNodes.begin(), boundaryNodes.end());
+
+    std::cout<<"db1"<<std::endl;
 
     std::vector<Eigen::Triplet<double>> tripletListNS;
     std::vector<Eigen::Triplet<double>> tripletListCS;
+    std::cout<<"db1"<<std::endl;
     tripletListNS.reserve(boundaryNodes.size());
     tripletListCS.reserve(freeNodes.size());
+    std::cout<<"db1"<<std::endl;
 
     for (int i=0; i<boundaryNodes.size(); i++) {
         tripletListNS.emplace_back(boundaryNodes[i], i, 1.0);
     }
+    std::cout<<"db1"<<std::endl;
 
     for (int i=0; i<freeNodes.size(); i++) {
         tripletListCS.emplace_back(freeNodes[i], i, 1.0);
     }
+    std::cout<<"db1"<<std::endl;
+
+    std::cout<<boundaryNodes.size()<<", "<<nullSpace.rows()<<", "<<nullSpace.cols()<<std::endl;
+    std::cout<<freeNodes.size()<<", "<<columnSpace.rows()<<", "<<columnSpace.cols()<<std::endl;
     
     nullSpace.setFromTriplets(tripletListNS.begin(), tripletListNS.end());
     columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
 }
 
 DvD ComputeSolutionStationary(SpD &StiffnessMatrix, SpD &PenaltyMatrix, SpD &FluxMatrix, SpD &fVec, SpD &columnSpace, SpD &nullSpace, DvD &boundaryVals) {
+    SpD FluxMatrixT = (SpD)(FluxMatrix.transpose());
+    SpD CombinedMatrix = StiffnessMatrix - FluxMatrix - FluxMatrixT + PenaltyMatrix;
     // Eliminate rows and columns corr. to boundary nodes
-    SpD CombinedMatrix = StiffnessMatrix - FluxMatrix - FluxMatrix.transpose() + PenaltyMatrix;
-    SpD columnSpaceT = static_cast<SpD>(columnSpace.transpose());
+    SpD columnSpaceT = (SpD)(columnSpace.transpose());
     SpD A11 = columnSpaceT * CombinedMatrix * columnSpace;
     // Eliminate boundary rows and free columns
     SpD A12 = columnSpaceT * CombinedMatrix * nullSpace;
@@ -486,7 +528,7 @@ DD PoissonSolve(QTM::QuadTreeMesh &inputMesh,
     std::cout<<"Assembling boundary condition vector"<<std::endl;
     DvD boundaryVals = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, bcs);
 
-    SpD nullSpace(nNodes, boundaryNodes.size());
+    SpD nullSpace(nNodes, allBoundaryNodes.size());
     SpD columnSpace(nNodes, freeNodes.size());
     std::cout<<"Assembling null-orth matrix"<<std::endl;
     GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodes, nullSpace, columnSpace);
