@@ -5,6 +5,10 @@ import json
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
+import subprocess
+
+subprocess.run([".\main.exe", "8", "5", "5", "5", "5", "0", "100*sin(pi*x/5)", "0", "0", "0"]) 
+
 def draw_cell(cell, ax):
     # Adjusting for the center coordinates and level-dependent size
     half_side_length = cell['width'] / 2
@@ -12,8 +16,6 @@ def draw_cell(cell, ax):
     topLeftY = cell['y'] - half_side_length
 
     rect = patches.Rectangle((topLeftX, topLeftY), cell['width'], cell['width'], linewidth=1, edgecolor='black', facecolor='none')
-    # if cell['isLeaf']:
-        # ax.text(cell['x'], cell['y'], str(cell['CID']), ha='center', va='center', fontsize=8, color='blue')
 
     ax.add_patch(rect)
 
