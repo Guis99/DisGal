@@ -15,7 +15,7 @@ void exportToJson(std::shared_ptr<Cell> root, std::ostream& out, int indent) {
     out << tabs << "{";
     out << "\"x\": " << root->center[0] << ",\n ";
     out << tabs << "\"y\": " << root->center[1] << ",\n ";
-    out << tabs << "\"width\": " << 2*root->width << ",\n ";
+    out << tabs << "\"width\": " << root->width << ",\n ";
     out << tabs << "\"level\": " << root->level << ",\n ";
     out << tabs << "\"isLeaf\": " << (root->isLeaf() ? "true" : "false") << ",\n ";
     out << tabs << "\"CID\": " << root->CID << ",\n ";
@@ -58,7 +58,7 @@ int main(int argc, char* argv[]) {
         bcs.push_back(argv[i]);
     }
 
-    int penalty = std::stoi(argv[11]); 
+    double penalty = std::stod(argv[11]); 
 
     QuadTreeMesh mesh(deg, nx, ny, Lx, Ly);   
 

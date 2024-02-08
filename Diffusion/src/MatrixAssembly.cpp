@@ -100,6 +100,7 @@ std::cout<<"d5"<<std::endl;
 }
 
 SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
+    std::cout<<"alpha: "<<alpha<<std::endl;
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
@@ -199,7 +200,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 auto jumpMatrixT = (DD)jumpMatrix.transpose();
-                DD localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * jumpMatrixT);
+                DD localElemMat = (DD)(a * jumpMatrix * elm->width*quadWeights1D * jumpMatrixT);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -508,7 +509,7 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double k,
                 std::string source,
                 std::vector<std::string> bcs,
-                int penaltyParam) {
+                double penaltyParam) {
     
     auto boundaryNodes = inputMesh.boundaryNodes;
     std::vector<int> freeNodes = inputMesh.freeNodes;

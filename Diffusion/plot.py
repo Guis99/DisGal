@@ -2,20 +2,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.interpolate import griddata
 import json
-import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
 import subprocess
 
-subprocess.run([".\main.exe", "1", "150", "150", "5", "5", "0", "sin(4*pi*x/5)", "0", "0", "0", "50"]) 
+div = 16
+subprocess.run([".\main.exe", "1", str(div), str(div), "1", "1", "2*pi^2*sin(pi*x)*sin(pi*y)", ".0*sin(pi*x)", "0", "0", "0", "5"]) 
 
 def draw_cell(cell, ax):
     # Adjusting for the center coordinates and level-dependent size
-    half_side_length = cell['width'] / 2
+    half_side_length = cell['width']
     topLeftX = cell['x'] - half_side_length
     topLeftY = cell['y'] - half_side_length
 
-    rect = patches.Rectangle((topLeftX, topLeftY), cell['width'], cell['width'], linewidth=.25, edgecolor='black', facecolor='none')
+    rect = patches.Rectangle((topLeftX, topLeftY), cell['width'], cell['width'], linewidth=.125, edgecolor='black', facecolor='none')
 
     ax.add_patch(rect)
 

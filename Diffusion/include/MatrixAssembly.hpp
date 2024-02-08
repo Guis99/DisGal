@@ -30,4 +30,4 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double k,
                 std::string source,
                 std::vector<std::string> bcs,
-                int penaltyParam);
+                double penaltyParam);
