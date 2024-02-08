@@ -16,7 +16,7 @@ DD GenerateQuadWeights(std::vector<double> &gpX, std::vector<double> &gpY, int n
 }
 
 
-SpD StiffnessMatrix(QTM::QuadTreeMesh mesh, double k) {
+SpD StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
@@ -99,7 +99,7 @@ std::cout<<"d5"<<std::endl;
     return mat;
 }
 
-SpD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
+SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
@@ -188,7 +188,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
                     neighborNodes = mesh.GetGlobalElemNodes(oppdir, neighbor->CID);
                 }
                 // calculate penalty param
-                a = alpha/std::min(elm->width, neighbor->width)/2;
+                a = 2*alpha/std::min(elm->width, neighbor->width);
                 // calculate jump matrix
                 DD topJump = cellSign*B(Eigen::all, localNodes[dir]);
                 DD bottomJump = neighborSign*B(Eigen::all, localNodes[oppdir]);
@@ -218,10 +218,10 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh mesh, double k, double alpha) {
     return mat;
 }
 
-SpD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
+SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     int deg = mesh.deg;
     int numNodes = deg+1;
-    int numElemNodes = numNodes * numNodes;
+    int numElemNodes = mesh.numElemNodes;
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
     std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
@@ -343,7 +343,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh mesh, double k) {
     return mat;
 }
 
-SpD AssembleFVec(QTM::QuadTreeMesh mesh, double f, std::string evalStr) {
+SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
@@ -398,7 +398,7 @@ double ComputeResidual() {
 
 }
 
-std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD &solution, QTM::QuadTreeMesh& mesh, double residualLimit) {
+std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, double residualLimit) {
     std::vector<std::shared_ptr<QTM::Cell>> out; out.reserve(mesh.leaves.size());
     for (auto leaf : mesh.leaves) {
         double res = ComputeResidual();
@@ -410,7 +410,7 @@ std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD &solution, QTM::QuadTr
     return out;
 }
 
-DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh &inputMesh, std::vector<std::vector<int>> &boundaryNodes, std::vector<int> &allBoundaryNodes, std::vector<std::string> &strs) {
+DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs) {
     std::vector<std::array<double,2>> boundaryNodePos;
     for (auto bNodes : boundaryNodes) {
         auto nodePos = inputMesh.GetNodePos(bNodes);
@@ -445,11 +445,11 @@ DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh &inputMesh, std::vector<std::vec
     return (DvD)boundaryNodeValuesVec;
 }
 
-void GetExtensionMatrices(QTM::QuadTreeMesh &inputMesh,
-                                        std::vector<int> &boundaryNodes, 
-                                        std::vector<int> &freeNodes,
-                                        SpD &nullSpace,
-                                        SpD &columnSpace) {
+void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
+                                        std::vector<int>& boundaryNodes, 
+                                        std::vector<int>& freeNodes,
+                                        SpD& nullSpace,
+                                        SpD& columnSpace) {
     int nNodes = inputMesh.nNodes();
 
     std::cout<<"db1"<<std::endl;
@@ -482,9 +482,9 @@ void GetExtensionMatrices(QTM::QuadTreeMesh &inputMesh,
     columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
 }
 
-DvD ComputeSolutionStationary(SpD &StiffnessMatrix, SpD &PenaltyMatrix, SpD &FluxMatrix, SpD &fVec, SpD &columnSpace, SpD &nullSpace, DvD &boundaryVals) {
+DvD ComputeSolutionStationary(SpD& StiffnessMatrix, SpD& PenaltyMatrix, SpD& FluxMatrix, SpD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals) {
     SpD FluxMatrixT = (SpD)(FluxMatrix.transpose());
-    SpD CombinedMatrix = StiffnessMatrix - FluxMatrix - FluxMatrixT + PenaltyMatrix;
+    SpD CombinedMatrix = StiffnessMatrix - FluxMatrix + FluxMatrixT + PenaltyMatrix;
     // Eliminate rows and columns corr. to boundary nodes
     SpD columnSpaceT = (SpD)(columnSpace.transpose());
     SpD A11 = columnSpaceT * CombinedMatrix * columnSpace;
@@ -493,7 +493,7 @@ DvD ComputeSolutionStationary(SpD &StiffnessMatrix, SpD &PenaltyMatrix, SpD &Flu
     // Eliminate boundary rows
     SpD F11 = columnSpaceT * fVec;
 
-    Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int> > LuSolver;    
+    Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
     LuSolver.analyzePattern(A11);
     LuSolver.factorize(A11);
 
@@ -503,11 +503,12 @@ DvD ComputeSolutionStationary(SpD &StiffnessMatrix, SpD &PenaltyMatrix, SpD &Flu
     return x;
 }
 
-DD PoissonSolve(QTM::QuadTreeMesh &inputMesh,
+DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double c,
                 double k,
                 std::string source,
-                std::vector<std::string> bcs) {
+                std::vector<std::string> bcs,
+                int penaltyParam) {
     
     auto boundaryNodes = inputMesh.boundaryNodes;
     std::vector<int> freeNodes = inputMesh.freeNodes;
@@ -521,7 +522,7 @@ DD PoissonSolve(QTM::QuadTreeMesh &inputMesh,
     std::cout<<"Assembling stiffness matrix"<<std::endl;
     SpD KMatrix = StiffnessMatrix(inputMesh, k);
     std::cout<<"Assembling penalty matrix"<<std::endl;
-    SpD PMatrix = PenaltyMatrix(inputMesh, k, 9);
+    SpD PMatrix = PenaltyMatrix(inputMesh, k, penaltyParam);
     std::cout<<"Assembling flux matrix"<<std::endl;
     SpD SMatrix = FluxMatrix(inputMesh, k);
 

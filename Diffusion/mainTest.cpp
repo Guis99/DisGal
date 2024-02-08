@@ -58,17 +58,20 @@ int main(int argc, char* argv[]) {
         bcs.push_back(argv[i]);
     }
 
+    int penalty = std::stoi(argv[11]); 
+
     QuadTreeMesh mesh(deg, nx, ny, Lx, Ly);   
 
     double c = 1;
     double k = 1;
 
-    DD z = PoissonSolve(mesh, c, k, source, bcs);
+    DD z = PoissonSolve(mesh, c, k, source, bcs, penalty);
 
     std::vector<std::array<double,2>> allNodePos = mesh.nodePositions;
 
     std::ofstream fileOut("output.txt");
 
+    std::cout<<"Writing results to file"<<std::endl;
     if (fileOut.is_open()) {
         for (size_t i = 0; i < allNodePos.size(); ++i) {
             // Extract x and y from the coordinates vector
@@ -92,6 +95,8 @@ int main(int argc, char* argv[]) {
     outFile << "\"isLeaf\": " << "false" << ",\n ";
     outFile << "\"CID\": " << 0 << ",\n ";
     outFile << "\"children\": [\n";
+
+    std::cout<<"Writing mesh data to file\n";
     for (auto cell : mesh.topCells) {
         exportToJson(cell, outFile, 1);
         if (cell != mesh.topCells.back()) {
