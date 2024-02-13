@@ -6,8 +6,13 @@ import matplotlib.patches as patches
 
 import subprocess
 
-div = 16
-subprocess.run([".\main.exe", "1", str(div), str(div), "1", "1", "2*pi^2*sin(pi*x)*sin(pi*y)", ".0*sin(pi*x)", "0", "0", "0", "5"]) 
+div = 1
+force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
+zero = "10"
+
+div2 = 32
+# subprocess.run([".\main.exe", "20", str(div), str(div), "4", "4", "0", "sin(pi*x/4)", "-sin(pi*y/4)", "sin(pi*x/4)", "-sin(pi*y/4)", "5"]) 
+subprocess.run([".\main.exe", "1", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "9"]) 
 
 def draw_cell(cell, ax):
     # Adjusting for the center coordinates and level-dependent size
@@ -15,7 +20,7 @@ def draw_cell(cell, ax):
     topLeftX = cell['x'] - half_side_length
     topLeftY = cell['y'] - half_side_length
 
-    rect = patches.Rectangle((topLeftX, topLeftY), cell['width'], cell['width'], linewidth=.125, edgecolor='black', facecolor='none')
+    rect = patches.Rectangle((topLeftX, topLeftY), 2*cell['width'], 2*cell['width'], linewidth=.125, edgecolor='black', facecolor='none')
 
     ax.add_patch(rect)
 
@@ -57,6 +62,7 @@ with open("quadtree.json", 'r') as f:
 
     draw_cell(quadtree, ax)
     plt.axis('equal')  # Ensures the plot is square in shape
+
 
 fig2 = plt.figure(figsize =(14, 9))
 ax2 = plt.axes(projection ='3d')

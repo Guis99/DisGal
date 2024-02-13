@@ -114,7 +114,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
 
     // get basis func vals for split cell quad
     std::vector<double> BhInitializer; 
-    BhInitializer.reserve(numNodes * numNodes);
+    BhInitializer.reserve((2*numNodes-1) * numNodes);
     std::cout<<"db1"<<std::endl;
 
     // get unit vecs
@@ -127,6 +127,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
         std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
         BhInitializer.insert(BhInitializer.end(), xVals.begin(), xVals.end());
     }
+
     std::cout<<"db1"<<std::endl;
     // map basis values to matrix
     Eigen::Map<DD> BhT(BhInitializer.data(), 2*numNodes-1, numNodes); // eval points are traversed first
@@ -172,6 +173,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
     std::vector<std::shared_ptr<QTM::Cell>> neighbors;
     std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
     for (auto &elm : leaves) {
+        double jac = elm->width;
         // get neighbors
         for (auto dir : directions) {
             QTM::Direction oppdir = (QTM::Direction)((dir+2)%4);
@@ -200,7 +202,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 auto jumpMatrixT = (DD)jumpMatrix.transpose();
-                DD localElemMat = (DD)(a * jumpMatrix * elm->width*quadWeights1D * jumpMatrixT);
+                DD localElemMat = (DD)(a * jumpMatrix * jac*jac*quadWeights1D * jumpMatrixT);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -279,6 +281,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
     for (auto &elm : leaves) {
+        double jac = elm->width;
         // get neighbors
         for (auto dir : directions) {
             cellSign = edgeSign[dir]; neighborSign = -cellSign;
@@ -320,8 +323,8 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(jumpMatrix * elm->width*quadWeights1D * fluxMatrixX + 
-                                    jumpMatrix * elm->width*quadWeights1D * fluxMatrixY);
+                DD localElemMat = (DD)(jumpMatrix * jac *quadWeights1D * fluxMatrixX + 
+                                    jumpMatrix * jac * quadWeights1D * fluxMatrixY);
 
                 if (neighbor->CID == elm->CID) {
                     localElemMat = (DD)(2*localElemMat);
@@ -371,7 +374,7 @@ SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     DvD localElemMat(numElemNodes);
     auto leaves = mesh.GetAllCells();
     for (auto &elm : leaves) {
-        double Lx = elm->width; // Jacobian factors
+        double jac = elm->width; // Jacobian factors
         // calculate local matrix
         std::vector<double> collectSourceVals; collectSourceVals.reserve(numElemNodes);
         auto nodes = elm->nodes;
@@ -380,7 +383,7 @@ SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
         }
         Eigen::Map<DvD> sourceVector(collectSourceVals.data(), numElemNodes, 1);
 
-        localElemMat = weightMat*sourceVector*Lx*Lx/4;
+        localElemMat = weightMat*sourceVector*jac*jac;
         // Get nodes in element
         
         // Generate i,j,v triplets
@@ -485,22 +488,49 @@ void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
 
 DvD ComputeSolutionStationary(SpD& StiffnessMatrix, SpD& PenaltyMatrix, SpD& FluxMatrix, SpD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals) {
     SpD FluxMatrixT = (SpD)(FluxMatrix.transpose());
-    SpD CombinedMatrix = StiffnessMatrix - FluxMatrix + FluxMatrixT + PenaltyMatrix;
+    SpD CombinedMatrix = StiffnessMatrix - FluxMatrix - FluxMatrixT + PenaltyMatrix;
     // Eliminate rows and columns corr. to boundary nodes
     SpD columnSpaceT = (SpD)(columnSpace.transpose());
+    SpD nullSpaceT = (SpD)(nullSpace.transpose());
+
+    // Eliminate boundary rows and boundary columns
     SpD A11 = columnSpaceT * CombinedMatrix * columnSpace;
     // Eliminate boundary rows and free columns
     SpD A12 = columnSpaceT * CombinedMatrix * nullSpace;
+    // Eliminate free rows and boundary columns
+    SpD A21 = nullSpaceT * CombinedMatrix * columnSpace;
+    // Eliminate free rows and free columns 
+    SpD A22 = nullSpaceT * CombinedMatrix * nullSpace;
     // Eliminate boundary rows
-    SpD F11 = columnSpaceT * fVec;
+    SpD F11 = columnSpaceT * fVec; // to check once I have access to notebook: remove assumption that test function is 0 on global boundaries
+    // Eliminate free rows
+    SpD F22 = nullSpaceT * fVec;
+
+    // // get Kbar
+    // Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver1;    
+    // LuSolver1.analyzePattern(A22);
+    // LuSolver1.factorize(A22);
+    // SpD KBarInterm = LuSolver1.solve(A21);
+    // SpD Kbar = A11 - A12*KBarInterm;
+
+    // // get Fbar
+    // Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver2;    
+    // LuSolver2.analyzePattern(A22);
+    // LuSolver2.factorize(A22);
+    // SpD FBarInterm = LuSolver2.solve(F22);
+    // SpD Fbar = F11 - A12 * FBarInterm;
+
+    // Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
+    // LuSolver.analyzePattern(Kbar);
+    // LuSolver.factorize(Kbar);
+    // DvD x = LuSolver.solve(Fbar);
 
     Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
     LuSolver.analyzePattern(A11);
     LuSolver.factorize(A11);
-
     DvD x = LuSolver.solve(F11 - A12 * boundaryVals);
+
     x = columnSpace * x + nullSpace * boundaryVals;
-    std::cout<<x.rows()<<std::endl;
     return x;
 }
 
