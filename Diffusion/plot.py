@@ -6,27 +6,25 @@ import matplotlib.patches as patches
 
 import subprocess
 
-div = 1
+div = 16
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
 zero = "10"
 
-div2 = 32
-# subprocess.run([".\main.exe", "20", str(div), str(div), "4", "4", "0", "sin(pi*x/4)", "-sin(pi*y/4)", "sin(pi*x/4)", "-sin(pi*y/4)", "5"]) 
-subprocess.run([".\main.exe", "1", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "9"]) 
+div2 = 3
+# subprocess.run([".\main.exe", "1", str(div), str(div), "4", "4", "0", "sin(pi*x/4)", "-sin(pi*y/4)", "sin(pi*x/4)", "-sin(pi*y/4)", "50"]) 
+subprocess.run([".\main.exe", "4", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "100"]) 
 
-def draw_cell(cell, ax):
+def draw_cell_nr(cell, ax):
     # Adjusting for the center coordinates and level-dependent size
-    half_side_length = cell['width']
-    topLeftX = cell['x'] - half_side_length
-    topLeftY = cell['y'] - half_side_length
+    for child in cell['children']:
+        half_side_length = child['width'] / 2
+        topLeftX = child['x'] - half_side_length
+        topLeftY = child['y'] - half_side_length
 
-    rect = patches.Rectangle((topLeftX, topLeftY), 2*cell['width'], 2*cell['width'], linewidth=.125, edgecolor='black', facecolor='none')
+        rect = patches.Rectangle((topLeftX, topLeftY), child['width'], child['width'], linewidth=1, edgecolor='black', facecolor='none')
+        # ax.text(child['x'], child['y'], str(child['CID']), ha='center', va='center', fontsize=8, color='blue')
 
-    ax.add_patch(rect)
-
-    if not cell['isLeaf']:
-        for child in cell['children']:
-            draw_cell(child, ax)
+        ax.add_patch(rect)
 
 # Step 1: Load your data
 # Replace 'your_data_file.txt' with the path to your actual data file
@@ -54,13 +52,13 @@ plt.colorbar()  # Show color scale
 # plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
 plt.xlabel('X')
 plt.ylabel('Y')
-plt.title('Contour plot of irregularly spaced data')
+plt.title('Contour plot')
 
 print("Plotting quadtree")
 with open("quadtree.json", 'r') as f:
     quadtree = json.load(f)
 
-    draw_cell(quadtree, ax)
+    draw_cell_nr(quadtree, ax)
     plt.axis('equal')  # Ensures the plot is square in shape
 
 

@@ -6,27 +6,32 @@
 
 using namespace QTM;
 
-void exportToJson(std::shared_ptr<Cell> root, std::ostream& out, int indent);
-void exportToJson(std::shared_ptr<Cell> root, std::ostream& out, int indent) {
-    std::string tabs;
-    for (int i=0; i<indent; i++) {
-        tabs += "\t";
+void exportToJson(QuadTreeMesh mesh, std::ostream& out) {
+    std::vector<std::shared_ptr<Cell>> allLeaves;
+    for (auto cell : mesh.topCells) {
+        auto leaves = cell->traverse();
+        allLeaves.insert(allLeaves.end(), leaves.begin(), leaves.end());
     }
-    out << tabs << "{";
-    out << "\"x\": " << root->center[0] << ",\n ";
-    out << tabs << "\"y\": " << root->center[1] << ",\n ";
-    out << tabs << "\"width\": " << root->width << ",\n ";
-    out << tabs << "\"level\": " << root->level << ",\n ";
-    out << tabs << "\"isLeaf\": " << (root->isLeaf() ? "true" : "false") << ",\n ";
-    out << tabs << "\"CID\": " << root->CID << ",\n ";
-    out << tabs << "\"children\": [\n";
-    for (int i = 0; i < 4; ++i) {
-        if (root->children[i] != nullptr) {
-            if (i > 0) out << ",\n ";
-            exportToJson(root->children[i], out, indent+1);
-        }
+    out << "{";
+    out << "\"children\": [\n";
+
+    out << "{";
+    out << "\"x\": " << allLeaves[0]->center[0] << ", ";
+    out << "\"y\": " << allLeaves[0]->center[1] << ", ";
+    out << "\"width\": " << 2*allLeaves[0]->width << ", ";
+    out << "\"level\": " << allLeaves[0]->level << ", ";
+    out << "\"CID\": " << allLeaves[0]->CID << "}\n ";
+
+    for (int i=1; i<allLeaves.size(); i++) {
+        auto leaf = allLeaves[i];
+        out <<",{";
+        out << "\"x\": " << leaf->center[0] << ", ";
+        out << "\"y\": " << leaf->center[1] << ", ";
+        out << "\"width\": " << 2*leaf->width << ", ";
+        out << "\"level\": " << leaf->level << ", ";
+        out << "\"CID\": " << leaf->CID << "}\n ";
     }
-    out << tabs << "]}";
+    out << "]}";
 }
 
 int main(int argc, char* argv[]) {
@@ -60,7 +65,10 @@ int main(int argc, char* argv[]) {
 
     double penalty = std::stod(argv[11]); 
 
+    std::cout<<"hi"<<std::endl;
+
     QuadTreeMesh mesh(deg, nx, ny, Lx, Ly);   
+    std::cout<<"hi"<<std::endl;
 
     double c = 1;
     double k = 1;
@@ -87,21 +95,5 @@ int main(int argc, char* argv[]) {
     }
 
     std::ofstream outFile("quadtree.json");
-    outFile << "{";
-    outFile << "\"x\": " << 0 << ",\n ";
-    outFile << "\"y\": " << 0 << ",\n ";
-    outFile << "\"width\": " << 0 << ",\n ";
-    outFile << "\"level\": " << 0 << ",\n ";
-    outFile << "\"isLeaf\": " << "false" << ",\n ";
-    outFile << "\"CID\": " << 0 << ",\n ";
-    outFile << "\"children\": [\n";
-
-    std::cout<<"Writing mesh data to file\n";
-    for (auto cell : mesh.topCells) {
-        exportToJson(cell, outFile, 1);
-        if (cell != mesh.topCells.back()) {
-            outFile << ", ";
-        }
-    }
-    outFile << "]}";
+    exportToJson(mesh, outFile);
 }

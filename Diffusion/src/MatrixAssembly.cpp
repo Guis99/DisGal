@@ -185,13 +185,14 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
                     continue;
                 }
                 if (neighbor == nullptr) { // case curr boundary is exterior
-                    neighborNodes = {};
-                    neighbor = elm;
+                    continue;
+                    // neighborNodes = {};
+                    // neighbor = elm;
                 } else { // case appropriate neighbor exists
                     neighborNodes = mesh.GetGlobalElemNodes(oppdir, neighbor->CID);
                 }
                 // calculate penalty param
-                a = 2*alpha/std::min(elm->width, neighbor->width);
+                a = alpha/std::min(elm->width, neighbor->width)/2;
                 // calculate jump matrix
                 DD topJump = cellSign*B(Eigen::all, localNodes[dir]);
                 DD bottomJump = neighborSign*B(Eigen::all, localNodes[oppdir]);
@@ -202,7 +203,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 auto jumpMatrixT = (DD)jumpMatrix.transpose();
-                DD localElemMat = (DD)(a * jumpMatrix * jac*jac*quadWeights1D * jumpMatrixT);
+                DD localElemMat = (DD)(a * jumpMatrix * jac*quadWeights1D * jumpMatrixT);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -252,7 +253,6 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     
     // map derivative values to matrix
     Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
-    A = .5*A;
 
     // Get element-wise matrix intermediates
     DD combinedX(numElemNodes, numElemNodes);
@@ -293,8 +293,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
                     continue;
                 }
                 if (neighbor == nullptr) { // case curr boundary is exterior
-                    neighborNodes = {};
-                    neighbor = elm;
+                    continue;
                 } else { // case appropriate neighbor exists
                     neighborNodes = mesh.GetGlobalElemNodes(oppdir, neighbor->CID);
                 }
@@ -323,12 +322,8 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(jumpMatrix * jac *quadWeights1D * fluxMatrixX + 
-                                    jumpMatrix * jac * quadWeights1D * fluxMatrixY);
-
-                if (neighbor->CID == elm->CID) {
-                    localElemMat = (DD)(2*localElemMat);
-                }
+                DD localElemMat = (DD)(.5 * jumpMatrix * quadWeights1D * fluxMatrixX + 
+                                    .5 * jumpMatrix * quadWeights1D * fluxMatrixY);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
