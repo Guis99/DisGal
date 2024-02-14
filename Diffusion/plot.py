@@ -6,13 +6,13 @@ import matplotlib.patches as patches
 
 import subprocess
 
-div = 16
+div = 4
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
 zero = "10"
 
-div2 = 3
-# subprocess.run([".\main.exe", "1", str(div), str(div), "4", "4", "0", "sin(pi*x/4)", "-sin(pi*y/4)", "sin(pi*x/4)", "-sin(pi*y/4)", "50"]) 
-subprocess.run([".\main.exe", "4", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "100"]) 
+div2 = 8
+subprocess.run([".\main.exe", "8", str(div), str(div), "4", "4", "3", "sin(pi*x/4)", "-sin(pi*y/4)", "sin(pi*x/4)", "-sin(pi*y/4)", "50"]) 
+# subprocess.run([".\main.exe", "4", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "0"]) 
 
 def draw_cell_nr(cell, ax):
     # Adjusting for the center coordinates and level-dependent size

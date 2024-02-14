@@ -70,6 +70,13 @@ int main(int argc, char* argv[]) {
     QuadTreeMesh mesh(deg, nx, ny, Lx, Ly);   
     std::cout<<"hi"<<std::endl;
 
+    std::cout<<"boundary nodes:\n";
+    for (auto nodes : mesh.boundaryNodes) {
+        for (auto i : nodes) {
+            std::cout<<i<<std::endl;
+        }
+    }
+
     double c = 1;
     double k = 1;
 
