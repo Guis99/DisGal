@@ -3,6 +3,7 @@
 #include "..\..\Dependencies\Eigen\Sparse"
 #include "..\..\Dependencies\unsupported\Eigen\KroneckerProduct"
 #include "..\..\Dependencies\Utils\Utils.hpp"
+#include "..\..\Dependencies\Eigen\IterativeLinearSolvers"
 // #include "..\..\Meshing\Meshing.hpp"
 
 typedef Eigen::SparseMatrix<double> SpD;
@@ -16,7 +17,7 @@ SpD StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k);
 SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha);
 SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k);
 SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr);;
-double ComputeResidual();
+std::vector<double> ComputeResiduals(QTM::QuadTreeMesh&, DvD& solution, SpD& source);
 std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, double residualLimit);
 DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs);
 void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
