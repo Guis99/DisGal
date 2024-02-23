@@ -6,16 +6,16 @@ import matplotlib.patches as patches
 
 import subprocess
 
-div = 3
+div = 2
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
 zero = "10"
 
-div2 = 3
-# subprocess.run([".\main.exe", "2", str(div), str(div), "1", "1", "100*x*y", "sin(pi*x)", "-sin(3*pi*y)", "sin(pi*x)", "-sin(3*pi*y)", "500"]) 
-# subprocess.run([".\main.exe", "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "9"]) 
+exeSelect = 2
+toRun = ".\main.exe" if exeSelect == 1 else ".\mainSplit.exe"
 
-# subprocess.run([".\mainSplit.exe", "5", str(div), str(div), "1", "1", "100*x*y", "sin(pi*x)", "-sin(3*pi*y)", "sin(pi*x)", "-sin(3*pi*y)", "0"])
-subprocess.run([".\mainSplit.exe", "5", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "00"]) 
+div2 = 2
+# subprocess.run([toRun, "1", str(div), str(div), "1", "1", "100*x*y", "sin(pi*x)", "-sin(3*pi*y)", "sin(pi*x)", "-sin(3*pi*y)", "900"]) 
+subprocess.run([toRun, "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "50"])  
 
 def draw_cell_nr(cell, ax):
     # Adjusting for the center coordinates and level-dependent size

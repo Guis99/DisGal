@@ -99,11 +99,10 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
 
     // basis func to node mapping
     DD B; B.setIdentity(numElemNodes, numElemNodes);
-    DD Bs; Bs.setIdentity(2*numNodes-1, 2*numNodes-1);
 
     // get basis func vals for split cell quad
     std::vector<double> BhInitializer; 
-    BhInitializer.reserve((2*numNodes-1) * numNodes);
+    BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // get unit vecs
     DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
@@ -126,6 +125,11 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, bottomVec); splitCellVals[1] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
+
+    std::cout<<"split cell jumps in penalty function:\n"<<std::endl;
+    for (auto v : splitCellVals) {
+        std::cout<<v<<"\n------------"<<std::endl;
+    }
 
     // index vectors for split cell gauss points
     std::vector<int> frontIdxs(numNodes, 0);  
@@ -190,7 +194,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
                 auto jac = std::min(elm->width, neighbor->width);
                 // calculate penalty param
                 a = alpha/jac/2;
-                if (neighbor || neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
                     neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
                     neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
                 } else { 
@@ -275,7 +279,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
 
     // get basis func vals for split cell quad
     std::vector<double> BhInitializer; 
-    BhInitializer.reserve((2*numNodes-1) * numNodes);
+    BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // get unit vecs
     DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
@@ -293,7 +297,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     }
 
     // map basis values to matrix
-    Eigen::Map<DD> BhT(BhInitializer.data(), 2*numNodes-1, numNodes); // eval points are traversed first
+    Eigen::Map<DD> BhT(BhInitializer.data(), mesh.halfGaussPoints.size(), numNodes); // eval points are traversed first
     DD Bh = (DD)(BhT.transpose());
 
     std::array<DD,4> splitCellVals;
@@ -303,10 +307,15 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, bottomVec); splitCellVals[1] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
+
+    std::cout<<"split cell jumps in flux function:\n"<<std::endl;
+    for (auto v : splitCellVals) {
+        std::cout<<v<<"\n--------------"<<std::endl;
+    }
     
     // get basis func gradients for split cell quad
     std::vector<double> AhInitializer; 
-    AhInitializer.reserve((2*numNodes-1) * numNodes);
+    AhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // Generate derivatives for each basis function, copy to full array
     for (int k=0; k<mesh.halfGaussPoints.size(); k++) { 

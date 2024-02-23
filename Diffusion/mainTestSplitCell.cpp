@@ -65,21 +65,23 @@ int main(int argc, char* argv[]) {
 
     double penalty = std::stod(argv[11]); 
 
+    nx = 4; 
+    ny = 4;
+
     QuadTreeMesh mesh(deg, nx, ny, Lx, Ly);   
     auto leaves = mesh.leaves;
 
     std::vector<std::shared_ptr<Cell>> toRefine;
-    toRefine = {leaves[0]};
-
+    // toRefine = {leaves[0]};
+    // mesh.Refine(toRefine);
+    toRefine = {leaves[5],leaves[6],leaves[9],leaves[10]};
     mesh.Refine(toRefine);
-    // toRefine = {leaves[5],leaves[6],leaves[9],leaves[10]};
-    // mesh.Refine(toRefine);
 
-    // toRefine = {mesh.leaves[6]};
-    // mesh.Refine(toRefine);
+    toRefine = {mesh.leaves[6]};
+    mesh.Refine(toRefine);
 
-    // toRefine = {mesh.leaves[9]};
-    // mesh.Refine(toRefine);
+    toRefine = {mesh.leaves[9]};
+    mesh.Refine(toRefine);
 
     std::ofstream outFile("quadtree.json");
     exportToJson(mesh, outFile);
