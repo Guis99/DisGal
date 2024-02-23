@@ -3,8 +3,10 @@
 #include "..\..\Dependencies\Eigen\Sparse"
 #include "..\..\Dependencies\unsupported\Eigen\KroneckerProduct"
 #include "..\..\Dependencies\Utils\Utils.hpp"
-#include "..\..\Dependencies\Eigen\IterativeLinearSolvers"
 // #include "..\..\Meshing\Meshing.hpp"
+
+#ifndef MatrixAssembly_diff
+#define MatrixAssembly_diff
 
 typedef Eigen::SparseMatrix<double> SpD;
 // Dynamically-sized matrix of doubles
@@ -32,3 +34,4 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 std::string source,
                 std::vector<std::string> bcs,
                 double penaltyParam);
+#endif
