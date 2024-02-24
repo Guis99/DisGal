@@ -126,11 +126,6 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
     splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
 
-    std::cout<<"split cell jumps in penalty function:\n"<<std::endl;
-    for (auto v : splitCellVals) {
-        std::cout<<v<<"\n------------"<<std::endl;
-    }
-
     // index vectors for split cell gauss points
     std::vector<int> frontIdxs(numNodes, 0);  
     std::vector<int> backIdxs(numNodes, 0);
@@ -308,11 +303,6 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
 
-    std::cout<<"split cell jumps in flux function:\n"<<std::endl;
-    for (auto v : splitCellVals) {
-        std::cout<<v<<"\n--------------"<<std::endl;
-    }
-    
     // get basis func gradients for split cell quad
     std::vector<double> AhInitializer; 
     AhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
@@ -325,33 +315,24 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     
     // map derivative values to matrix
     Eigen::Map<DD> Ah(AhInitializer.data(), mesh.halfGaussPoints.size(), numNodes); 
-    std::cout<<"db0"<<std::endl;
 
     DD topGrads = A(0, Eigen::all);
     DD bottomGrads = A(numNodes-1, Eigen::all);
 
     std::array<DD,4> splitCellGradsX;
-    std::cout<<"db1"<<std::endl;
-    std::cout<<bottomRowVec.rows()<<", "<<bottomRowVec.cols()<<std::endl;
-    std::cout<<topGrads.rows()<<", "<<topGrads.cols()<<std::endl;
-    std::cout<<bottomGrads.rows()<<", "<<bottomGrads.cols()<<std::endl;
-    std::cout<<Ah.rows()<<", "<<Ah.cols()<<std::endl;
     
-    DD splitCellGradXPlaceholder(mesh.halfGaussPoints.size(), numElemNodes); // Needs element-wise mult??
-    std::cout<<splitCellGradXPlaceholder.rows()<<", "<<splitCellGradXPlaceholder.cols()<<std::endl;
+    DD splitCellGradXPlaceholder(mesh.halfGaussPoints.size(), numElemNodes);
     splitCellGradXPlaceholder << Eigen::kroneckerProduct(bottomRowVec, Ah); splitCellGradsX[0] = splitCellGradXPlaceholder;
     splitCellGradXPlaceholder << Eigen::kroneckerProduct(BhT, bottomGrads); splitCellGradsX[1] = splitCellGradXPlaceholder;
     splitCellGradXPlaceholder << Eigen::kroneckerProduct(topRowVec, Ah); splitCellGradsX[2] = splitCellGradXPlaceholder;
     splitCellGradXPlaceholder << Eigen::kroneckerProduct(BhT, topGrads); splitCellGradsX[3] = splitCellGradXPlaceholder;
-    std::cout<<"db2"<<std::endl;
 
     std::array<DD,4> splitCellGradsY;
-    DD splitCellGradYPlaceholder(mesh.halfGaussPoints.size(), numElemNodes); // Needs element-wise mult??
+    DD splitCellGradYPlaceholder(mesh.halfGaussPoints.size(), numElemNodes); 
     splitCellGradYPlaceholder << Eigen::kroneckerProduct(bottomGrads, BhT); splitCellGradsY[0] = splitCellGradYPlaceholder;
     splitCellGradYPlaceholder << Eigen::kroneckerProduct(Ah, bottomRowVec); splitCellGradsY[1] = splitCellGradYPlaceholder;
     splitCellGradYPlaceholder << Eigen::kroneckerProduct(topGrads, BhT); splitCellGradsY[2] = splitCellGradYPlaceholder;
     splitCellGradYPlaceholder << Eigen::kroneckerProduct(Ah, topRowVec); splitCellGradsY[3] = splitCellGradYPlaceholder;
-    std::cout<<"db3"<<std::endl;
 
     // index vectors for split cell gauss points
     std::vector<int> frontIdxs(numNodes, 0);  
