@@ -9,6 +9,13 @@ SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
 SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&& P);
 SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state);
 
+DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
+                double rho,
+                double mu,
+                std::vector<std::string> source,
+                std::vector<std::string> bcs,
+                double penaltyParam);
+
 DD IncompressibleNavierStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
                 double mu,

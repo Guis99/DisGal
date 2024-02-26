@@ -578,50 +578,23 @@ void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
     columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
 }
 
-DvD ComputeSolutionStationary(SpD& StiffnessMatrix, SpD& PenaltyMatrix, SpD& FluxMatrix, SpD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals) {
-    SpD FluxMatrixT = (SpD)(FluxMatrix.transpose());
-    SpD CombinedMatrix = StiffnessMatrix - FluxMatrix - FluxMatrixT + PenaltyMatrix;
+DvD ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, SpD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals) {
     // Eliminate rows and columns corr. to boundary nodes
     SpD columnSpaceT = (SpD)(columnSpace.transpose());
     SpD nullSpaceT = (SpD)(nullSpace.transpose());
 
     // Eliminate boundary rows and boundary columns
-    SpD A11 = columnSpaceT * CombinedMatrix * columnSpace;
+    SpD A11 = columnSpaceT * StiffnessMatrix * columnSpace;
     // Eliminate boundary rows and free columns
-    SpD A12 = columnSpaceT * CombinedMatrix * nullSpace;
+    SpD A12 = columnSpaceT * StiffnessMatrix * nullSpace;
     // Eliminate boundary rows
     SpD F11 = columnSpaceT * fVec;
-
-    // // get Kbar
-    // Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver1;    
-    // LuSolver1.analyzePattern(A22);
-    // LuSolver1.factorize(A22);
-    // SpD KBarInterm = LuSolver1.solve(A21);
-    // SpD Kbar = A11 - A12*KBarInterm;
-
-    // // get Fbar
-    // Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver2;    
-    // LuSolver2.analyzePattern(A22);
-    // LuSolver2.factorize(A22);
-    // SpD FBarInterm = LuSolver2.solve(F22);
-    // SpD Fbar = F11 - A12 * FBarInterm;
-
-    // Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
-    // LuSolver.analyzePattern(Kbar);
-    // LuSolver.factorize(Kbar);
-    // DvD x = LuSolver.solve(Fbar);
 
     using namespace Eigen;
 
     Eigen::ConjugateGradient<SpD, Lower|Upper> cg;
     cg.compute(A11);
     DvD x = cg.solve(F11 - A12 * boundaryVals);
-
-
-    // Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
-    // LuSolver.analyzePattern(A11);
-    // LuSolver.factorize(A11);
-    // DvD x = LuSolver.solve(F11 - A12 * boundaryVals);
 
     x = columnSpace * x + nullSpace * boundaryVals;
     return x;
@@ -649,6 +622,9 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     SpD PMatrix = PenaltyMatrix(inputMesh, k, penaltyParam);
     std::cout<<"Assembling flux matrix"<<std::endl;
     SpD SMatrix = FluxMatrix(inputMesh, k);
+    SpD SMatrixT = (SpD)(SMatrix.transpose());
+    std::cout<<"Assembling overall system matrix"<<std::endl;
+    SpD StiffnessMatrix = KMatrix - SMatrix - SMatrixT + PMatrix;
 
     std::cout<<"Assembling RHS vector"<<std::endl;
     SpD FMatrix = AssembleFVec(inputMesh, 1.0, source);
@@ -660,7 +636,7 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<"Assembling null-orth matrix"<<std::endl;
     GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodes, nullSpace, columnSpace);
     std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
-    DD x = ComputeSolutionStationary(KMatrix, PMatrix, SMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
+    DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
     std::cout<<"System solved!"<<std::endl;
     return x;
 }
