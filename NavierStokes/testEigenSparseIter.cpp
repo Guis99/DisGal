@@ -25,5 +25,15 @@ int main() {
         }
     }
 
+    int nNodes = 5;
+    DvD ones = DvD::Ones(nNodes);
+    DvD twos = 2*DvD::Ones(nNodes);
+    DvD out(3*nNodes+1);
+    DvD allZeros = DvD::Zero(nNodes+1);
+
+    out << ones, twos, allZeros;
+
+    std::cout<<out<<std::endl;
+
     return 0;
 }

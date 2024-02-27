@@ -323,8 +323,13 @@ DvD AssembleStokesSource(QTM::QuadTreeMesh& mesh,
     outInit.insert(outInit.begin(), XSource.begin(), XSource.end());
     outInit.insert(outInit.begin(), YSource.begin(), YSource.end());
 
-    Eigen::Map<DvD> outP(outInit.data(),3*nNodes+1);
-    DvD out = (DvD)outP;
+    DvD out(3*nNodes+1);
+    DvD allZeros = DvD::Zero(nNodes+1);
+
+    out << XSource, YSource, allZeros;
+
+    // Eigen::Map<DvD> outP(outInit.data(),3*nNodes+1);
+    // DvD out = (DvD)outP;
 
     // // insert X source
     // for (int k = 0; k < XSource.outerSize(); ++k) {
@@ -345,16 +350,26 @@ DvD AssembleStokesSource(QTM::QuadTreeMesh& mesh,
     return out;
 }
 
-DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<std::string>& strs) {
+DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
+                                    std::vector<std::vector<int>>& boundaryNodes, 
+                                    std::vector<std::string>& strs, 
+                                    std::vector<int>& allBoundaryNodes, 
+                                    int offset) {
     std::vector<std::array<double,2>> boundaryNodePos;
+    int nNodes = inputMesh.nNodes();
+    int totalOffset = offset*nNodes;
     std::vector<int> allDirBoundary;
     for (auto bNodes : boundaryNodes) {
         allDirBoundary.insert(allDirBoundary.end(), bNodes.begin(), bNodes.end());
+    }
+    for (int bnd : allDirBoundary) {
+        allBoundaryNodes.push_back(totalOffset+bnd);
     }
     for (auto bNodes : boundaryNodes) {
         auto nodePos = inputMesh.GetNodePos(bNodes);
         boundaryNodePos.insert(boundaryNodePos.end(), nodePos.begin(), nodePos.end());
     }
+
     int numBoundaryNodes = allDirBoundary.size();
 
     // Boundary nodes are given in clockwise order, not column-major order
@@ -386,19 +401,18 @@ DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<s
 DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
                 double mu,
+                double penaltyParam,
                 std::vector<std::string> source,
                 std::vector<std::string> Ubcs,
                 std::vector<std::string> Vbcs,
                 std::vector<std::string> Pbcs,
-                double penaltyParam) {
-    auto boundaryNodes = inputMesh.boundaryNodes;
+                std::vector<std::string> Nbcs,
+                std::vector<std::vector<int>>& boundaryNodes,
+                std::vector<bool> velEss,
+                std::vector<bool> pEss) {
     std::vector<int> freeNodes = inputMesh.freeNodes;
     int nNodes = inputMesh.nNodes();
-
-    std::vector<int> allBoundaryNodes;
-    for (auto bNodes : boundaryNodes) {
-        allBoundaryNodes.insert(allBoundaryNodes.end(), bNodes.begin(), bNodes.end());
-    }
+    int offset1 = nNodes;
 
     std::cout<<"Assembling stiffness matrix..."<<std::endl;
     SpD KMatrix = StiffnessMatrix(inputMesh, mu);
@@ -413,13 +427,12 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     SpD PFMatrixX = PressureFluxMatrix(inputMesh, 1);
     SpD PFMatrixY = PressureFluxMatrix(inputMesh, 2);
 
+    std::cout<<"Assembling combined LHS matrix..."<<std::endl;
     SpD SMatrixT = (SpD)(SMatrix.transpose());
     SpD dgPoissonMat = KMatrix + PMatrix - SMatrix - SMatrixT;
 
     SpD combinedQVMatrixX = QVMatrixX + PFMatrixX;
     SpD combinedQVMatrixY = QVMatrixY + PFMatrixY;
-
-    std::cout<<"Assembling combined LHS matrix..."<<std::endl;
     SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, 
                             dgPoissonMat, combinedQVMatrixX, combinedQVMatrixY);
 
@@ -428,19 +441,41 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     DvD FMatrixY = AssembleFVec(inputMesh, 1.0, source[1]);
     DvD FMatrix = AssembleStokesSource(inputMesh, FMatrixX, FMatrixY);
     std::cout<<"Assembling boundary condition vector..."<<std::endl;
-    DvD UDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, boundaryNodes, Ubcs);
-    DvD VDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, boundaryNodes, Vbcs);
-    DvD PDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, boundaryNodes, Pbcs);
-    DvD dirichletBoundaryVals(3*allBoundaryNodes.size());
+    std::vector<int> allBoundaryNodes; // boundary dofs, *not* mesh nodes, where dirichlet bcs are applied 
+    std::vector<std::vector<int>> VDN; // mesh nodes where velocity is fixed
+    std::vector<std::vector<int>> PDN; // mesh nodes where pressure is fixed
+    std::vector<int> freeNodesAll; freeNodesAll.reserve(3*freeNodes.size()); // interior and neumann dofs, *not* mesh nodes
+    for (int i=0; i<boundaryNodes.size(); i++) {
+        if (velEss[i]) {
+            VDN.push_back(boundaryNodes[i]);
+        } else {
+            for (int vn : boundaryNodes[i]) {
+                freeNodesAll.push_back(vn);
+                freeNodesAll.push_back(vn + nNodes);
+            }
+        }
+
+        if (pEss[i]) {
+            PDN.push_back(boundaryNodes[i]);
+        } else {
+            for (int vn : boundaryNodes[i]) {
+                freeNodesAll.push_back(vn + offset1);
+            }
+        }
+    }
+    DvD UDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Ubcs, allBoundaryNodes, 0);
+    DvD VDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Vbcs, allBoundaryNodes, 1);
+    DvD PDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, PDN, Pbcs, allBoundaryNodes, 2);
+    DvD dirichletBoundaryVals(UDirichlet.cols() + VDirichlet.cols() + PDirichlet.cols());
 
     std::cout<<"Assembling null-orth matrix..."<<std::endl;
-    std::vector<int> freeNodesAll; freeNodesAll.reserve(3*freeNodes.size());
     for (int i=0; i<3; i++) {
         int offset = i*nNodes;
         for (int fn : freeNodes) {
             freeNodesAll.push_back(offset + fn);
         }
     }
+    std::sort(freeNodesAll.begin(), freeNodesAll.end());
 
     SpD nullSpace(3*nNodes+1, allBoundaryNodes.size());
     SpD columnSpace(3*nNodes+1, freeNodesAll.size());

@@ -10,7 +10,11 @@ SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&
 SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state);
 
 SpD GeneralizedNeumannBC(QTM::QuadTreeMesh& mesh, double mu);
-DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<std::string>& strs);
+DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
+                                    std::vector<std::vector<int>>& boundaryNodes, 
+                                    std::vector<std::string>& strs, 
+                                    std::vector<int>& allBoundaryNodes, 
+                                    int offset);
 
 DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
@@ -19,6 +23,7 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 std::vector<std::string> Ubcs,
                 std::vector<std::string> Vbcs,
                 std::vector<std::string> Pbcs,
+                std::vector<std::string> Nbcs,
                 double penaltyParam);
 
 DD IncompressibleNavierStokesSolve(QTM::QuadTreeMesh& inputMesh,
