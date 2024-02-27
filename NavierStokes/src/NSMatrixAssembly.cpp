@@ -71,6 +71,7 @@ SpD QVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
     return mat;
 }
 
@@ -183,7 +184,7 @@ SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
         // get neighbors
         for (auto dir : directions) {
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors[0] == nullptr) {
+            if (neighbors.size() == 0) {
                 continue;
             }
             QTM::Direction oppdir = oppdirs[dir];
@@ -240,6 +241,7 @@ SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
     return mat;
 }
 
@@ -249,6 +251,136 @@ SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&
 
 SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state) {
 
+}
+
+SpD GeneralizedNeumannBC(QTM::QuadTreeMesh& mesh, double mu) {
+    // Implements boundary condition of form mu * n dot grad(u) - p*n = 0
+}
+
+SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
+                            SpD& dgPoissonMat,
+                            SpD& QVMatrixX, 
+                            SpD& QVMatrixY) {
+    int nNodes = mesh.nNodes();
+    int offset1 = nNodes; 
+    int offset2 = 2*nNodes;
+    int offset3 = 3*nNodes;
+    int numElemNodes = mesh.numElemNodes;
+    std::vector<double> gaussPoints = mesh.gaussPoints;
+    int totalNNZ = 2*dgPoissonMat.nonZeros() + 2*QVMatrixX.nonZeros() + 2*QVMatrixY.nonZeros() + 2*nNodes;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
+
+    // insert diffusive terms
+    for (int k = 0; k < dgPoissonMat.outerSize(); ++k) {
+        for (SpD::InnerIterator it(dgPoissonMat, k); it; ++it) {
+            tripletList.emplace_back(it.row(), it.col(), it.value());
+            tripletList.emplace_back(it.row()+offset1, it.col()+offset1, it.value());
+        }
+    }
+
+    // insert pressure/divergence terms
+    for (int k = 0; k < QVMatrixX.outerSize(); ++k) {
+        for (SpD::InnerIterator it(QVMatrixX, k); it; ++it) {
+            tripletList.emplace_back(it.row(), it.col()+offset2, it.value());
+            tripletList.emplace_back(it.col()+offset2, it.row(), it.value());
+        }
+    }
+
+    for (int k = 0; k < QVMatrixY.outerSize(); ++k) {
+        for (SpD::InnerIterator it(QVMatrixY, k); it; ++it) {
+            tripletList.emplace_back(it.row()+offset1, it.col()+offset2, it.value());
+            tripletList.emplace_back(it.col()+offset2, it.row()+offset1, it.value());
+        }
+    }
+
+    // add zero mean pressure constraint 
+    int currDofIndx = offset3;
+    auto weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, mesh.deg+1, mesh.deg+1, numElemNodes);
+    std::vector<double> weights(weightMat.diagonal().begin(), weightMat.diagonal().end());
+    for (auto elm : mesh.leaves) {
+        double area = (elm->width * elm->width);
+        for (int i=0; i<numElemNodes; i++) {
+            tripletList.emplace_back(offset3, currDofIndx, area * weights[i]);
+            tripletList.emplace_back(currDofIndx, offset3, area * weights[i]);
+            currDofIndx++;
+        }
+    }
+
+    SpD mat(3*nNodes+1,3*nNodes+1);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    return mat;
+}
+
+DvD AssembleStokesSource(QTM::QuadTreeMesh& mesh, 
+                            DvD& XSource,
+                            DvD& YSource) {
+    int nNodes = mesh.nNodes();
+    int offset1 = nNodes;
+    int totalNNZ = XSource.nonZeros() + YSource.nonZeros();
+    // std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
+
+    std::vector<double> outInit;
+    outInit.insert(outInit.begin(), XSource.begin(), XSource.end());
+    outInit.insert(outInit.begin(), YSource.begin(), YSource.end());
+
+    Eigen::Map<DvD> outP(outInit.data(),3*nNodes+1);
+    DvD out = (DvD)outP;
+
+    // // insert X source
+    // for (int k = 0; k < XSource.outerSize(); ++k) {
+    //     for (SpD::InnerIterator it(XSource, k); it; ++it) {
+    //         tripletList.emplace_back(it.row(), it.col(), it.value());
+    //     }
+    // }
+
+    // // insert Y source
+    // for (int k = 0; k < YSource.outerSize(); ++k) {
+    //     for (SpD::InnerIterator it(YSource, k); it; ++it) {
+    //         tripletList.emplace_back(it.row()+offset1, it.col(), it.value());
+    //     }
+    // }
+
+    // SpD mat(3*nNodes+1,1);
+    // mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    return out;
+}
+
+DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<std::string>& strs) {
+    std::vector<std::array<double,2>> boundaryNodePos;
+    std::vector<int> allDirBoundary;
+    for (auto bNodes : boundaryNodes) {
+        allDirBoundary.insert(allDirBoundary.end(), bNodes.begin(), bNodes.end());
+    }
+    for (auto bNodes : boundaryNodes) {
+        auto nodePos = inputMesh.GetNodePos(bNodes);
+        boundaryNodePos.insert(boundaryNodePos.end(), nodePos.begin(), nodePos.end());
+    }
+    int numBoundaryNodes = allDirBoundary.size();
+
+    // Boundary nodes are given in clockwise order, not column-major order
+    std::vector<double> boundaryNodeValues; 
+    boundaryNodeValues.reserve(numBoundaryNodes);
+
+    std::vector<double> boundaryCalc;
+    std::array<double,2> *currPointer = boundaryNodePos.data();
+    int ptrIncr;
+    std::string prompt;
+
+    for (int i=0; i<4; i++) {
+        ptrIncr = boundaryNodes[i].size();
+        // Take bcFunc and evaluate it
+        boundaryCalc = Utils::EvalSymbolicBC(currPointer, ptrIncr, strs[i]);
+        boundaryNodeValues.insert(boundaryNodeValues.end(), boundaryCalc.begin(), boundaryCalc.end());
+        currPointer += ptrIncr;
+    }
+
+    auto RmOrder = allDirBoundary;
+    std::sort(RmOrder.begin(), RmOrder.end());
+
+    auto BcValsSorted = Utils::ReshuffleNodeVals(RmOrder, allDirBoundary, boundaryNodeValues);
+
+    Eigen::Map<DvD> boundaryNodeValuesVec(BcValsSorted.data(), numBoundaryNodes, 1);
+    return (DvD)boundaryNodeValuesVec;
 }
 
 DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
@@ -268,36 +400,105 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
         allBoundaryNodes.insert(allBoundaryNodes.end(), bNodes.begin(), bNodes.end());
     }
 
-    std::cout<<"Assembling stiffness matrix"<<std::endl;
+    std::cout<<"Assembling stiffness matrix..."<<std::endl;
     SpD KMatrix = StiffnessMatrix(inputMesh, mu);
-    std::cout<<"Assembling penalty matrix"<<std::endl;
+    std::cout<<"Assembling divergence matrix..."<<std::endl;
+    SpD QVMatrixX = QVMatrix(inputMesh, 1);
+    SpD QVMatrixY = QVMatrix(inputMesh, 2);
+    std::cout<<"Assembling penalty matrix..."<<std::endl;
     SpD PMatrix = PenaltyMatrix(inputMesh, mu, penaltyParam);
-    std::cout<<"Assembling flux matrix"<<std::endl;
+    std::cout<<"Assembling flux matrix..."<<std::endl;
     SpD SMatrix = FluxMatrix(inputMesh, mu);
+    std::cout<<"Assembling pressure flux matrix..."<<std::endl;
+    SpD PFMatrixX = PressureFluxMatrix(inputMesh, 1);
+    SpD PFMatrixY = PressureFluxMatrix(inputMesh, 2);
 
+    SpD SMatrixT = (SpD)(SMatrix.transpose());
+    SpD dgPoissonMat = KMatrix + PMatrix - SMatrix - SMatrixT;
 
-    std::cout<<"Assembling combined LHS matrix"<<std::endl;
-    SpD StiffnessMatrix(3*nNodes, 3*nNodes);
+    SpD combinedQVMatrixX = QVMatrixX + PFMatrixX;
+    SpD combinedQVMatrixY = QVMatrixY + PFMatrixY;
 
-    std::cout<<"Assembling RHS vector"<<std::endl;
-    SpD FMatrixX = AssembleFVec(inputMesh, 1.0, source[0]);
-    SpD FMatrixY = AssembleFVec(inputMesh, 1.0, source[1]);
-    SpD FMatrix(3*nNodes, 1);
-    std::cout<<"Assembling boundary condition vector"<<std::endl;
-    DvD UDirichlet = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, Ubcs);
-    DvD VDirichlet = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, Vbcs);
-    DvD PDirichlet = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, Pbcs);
+    std::cout<<"Assembling combined LHS matrix..."<<std::endl;
+    SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, 
+                            dgPoissonMat, combinedQVMatrixX, combinedQVMatrixY);
+
+    std::cout<<"Assembling RHS vector..."<<std::endl;
+    DvD FMatrixX = AssembleFVec(inputMesh, 1.0, source[0]);
+    DvD FMatrixY = AssembleFVec(inputMesh, 1.0, source[1]);
+    DvD FMatrix = AssembleStokesSource(inputMesh, FMatrixX, FMatrixY);
+    std::cout<<"Assembling boundary condition vector..."<<std::endl;
+    DvD UDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, boundaryNodes, Ubcs);
+    DvD VDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, boundaryNodes, Vbcs);
+    DvD PDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, boundaryNodes, Pbcs);
     DvD dirichletBoundaryVals(3*allBoundaryNodes.size());
 
-    SpD nullSpace(nNodes, allBoundaryNodes.size());
-    SpD columnSpace(nNodes, freeNodes.size());
-    SpD nullSpaceAll(3*nNodes, 3*allBoundaryNodes.size());
-    SpD columnSpaceAll(3*nNodes, 3*freeNodes.size());
-    std::cout<<"Assembling null-orth matrix"<<std::endl;
-    GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodes, nullSpace, columnSpace);
-    std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
-    DD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpaceAll, nullSpaceAll, dirichletBoundaryVals);
+    std::cout<<"Assembling null-orth matrix..."<<std::endl;
+    std::vector<int> freeNodesAll; freeNodesAll.reserve(3*freeNodes.size());
+    for (int i=0; i<3; i++) {
+        int offset = i*nNodes;
+        for (int fn : freeNodes) {
+            freeNodesAll.push_back(offset + fn);
+        }
+    }
+
+    SpD nullSpace(3*nNodes+1, allBoundaryNodes.size());
+    SpD columnSpace(3*nNodes+1, freeNodesAll.size());
+    GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodesAll, nullSpace, columnSpace);
+    std::cout<<"Solving system with "<<3*freeNodes.size()<<" degrees of freedom..."<<std::endl;
+    DD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
     std::cout<<"System solved!"<<std::endl;
     return x;
-
 }
+
+// DD IncompressibleNavierStokesSolve(QTM::QuadTreeMesh& inputMesh,
+//                 double rho,
+//                 double mu,
+//                 std::vector<std::string> source,
+//                 std::vector<std::string> Ubcs,
+//                 std::vector<std::string> Vbcs,
+//                 std::vector<std::string> Pbcs,
+//                 double penaltyParam) {
+//     auto boundaryNodes = inputMesh.boundaryNodes;
+//     std::vector<int> freeNodes = inputMesh.freeNodes;
+//     int nNodes = inputMesh.nNodes();
+
+//     std::vector<int> allBoundaryNodes;
+//     for (auto bNodes : boundaryNodes) {
+//         allBoundaryNodes.insert(allBoundaryNodes.end(), bNodes.begin(), bNodes.end());
+//     }
+
+//     std::cout<<"Assembling stiffness matrix..."<<std::endl;
+//     SpD KMatrix = StiffnessMatrix(inputMesh, mu);
+//     std::cout<<"Assembling divergence matrix..."<<std::endl;
+//     SpD QVMatrixX = QVMatrix(inputMesh, 1);
+//     SpD QVMatrixY = QVMatrix(inputMesh, 2);
+//     std::cout<<"Assembling penalty matrix..."<<std::endl;
+//     SpD PMatrix = PenaltyMatrix(inputMesh, mu, penaltyParam);
+//     std::cout<<"Assembling flux matrix..."<<std::endl;
+//     SpD SMatrix = FluxMatrix(inputMesh, mu);
+//     std::cout<<"Assembling pressure flux matrix..."<<std::endl;
+//     SpD PFMatrixX = PressureFluxMatrix(inputMesh, 1);
+//     SpD PFMatrixY = PressureFluxMatrix(inputMesh, 2);
+
+
+//     std::cout<<"Assembling combined LHS matrix..."<<std::endl;
+//     SpD StiffnessMatrix(3*nNodes, 3*nNodes);
+
+//     std::cout<<"Assembling RHS vector..."<<std::endl;
+//     DvD FMatrixX = AssembleFVec(inputMesh, 1.0, source[0]);
+//     DvD FMatrixY = AssembleFVec(inputMesh, 1.0, source[1]);
+//     SpD FMatrix(3*nNodes, 1);
+//     std::cout<<"Assembling boundary condition vector..."<<std::endl;
+//     DvD UDirichlet = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, Ubcs);
+//     DvD VDirichlet = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, Vbcs);
+//     DvD PDirichlet = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, Pbcs);
+//     DvD dirichletBoundaryVals(3*allBoundaryNodes.size());
+
+//     SpD nullSpace(nNodes, allBoundaryNodes.size());
+//     SpD columnSpace(nNodes, freeNodes.size());
+//     SpD nullSpaceAll(3*nNodes, 3*allBoundaryNodes.size());
+//     SpD columnSpaceAll(3*nNodes, 3*freeNodes.size());
+//     std::cout<<"Assembling null-orth matrix..."<<std::endl;
+//     GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodes, nullSpace, columnSpace);
+// }

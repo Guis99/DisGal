@@ -18,7 +18,7 @@ DD GenerateQuadWeights(std::vector<double>& gpX, std::vector<double> &gpY, int n
 SpD StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k);
 SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha);
 SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k);
-SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr);;
+DvD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr);;
 std::vector<double> ComputeResiduals(QTM::QuadTreeMesh&, DvD& solution, SpD& source);
 std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, double residualLimit);
 DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs);
@@ -27,7 +27,7 @@ void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
                                         std::vector<int>& freeNodes,
                                         SpD& nullSpace,
                                         SpD& columnSpace);
-DvD ComputeSolutionStationary(SpD& StiffnessMatrix, SpD& PenaltyMatrix, SpD& FluxMatrix, SpD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals);
+DvD ComputeSolutionStationaryLinear(SpD& KMatrix, DvD& FMatrix, SpD& columnSpace, SpD& nullSpace, DvD& dirichletBoundaryVals);
 DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double c,
                 double k,

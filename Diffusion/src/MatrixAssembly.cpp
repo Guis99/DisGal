@@ -87,6 +87,7 @@ SpD StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
     return mat;
 }
 
@@ -181,7 +182,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
             // std::cout<<"neighbor in direction "<<dir<<std::endl;
             QTM::Direction oppdir = oppdirs[dir];
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors[0] == nullptr) {
+            if (neighbors.size() == 0) {
                 continue;
             }
             for (int NI = 0; NI < neighbors.size(); NI++) { 
@@ -220,9 +221,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
-                        if (localElemMat(i,j) != 0) {
-                            tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
-                        }
+                        tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
                     }
                 }    
                 boundaryNodes.clear();
@@ -232,6 +231,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
     return mat;
 }
 
@@ -372,7 +372,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
         // get neighbors
         for (auto dir : directions) {
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors[0] == nullptr) {
+            if (neighbors.size() == 0) {
                 continue;
             }
             QTM::Direction oppdir = oppdirs[dir];
@@ -427,9 +427,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
-                        if (localElemMat(i,j) != 0) {
-                            tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
-                        }
+                        tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
                     }
                 }
             boundaryNodes.clear();
@@ -439,10 +437,11 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
     return mat;
 }
 
-SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
+DvD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
@@ -464,17 +463,20 @@ SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(nElements * numElemNodes);
 
+    DvD out(nNodes);
+
     // Integrate over all elements
     DvD localElemMat(numElemNodes);
     auto leaves = mesh.GetAllCells();
     for (auto &elm : leaves) {
         double jac = elm->width; // Jacobian factors
         // calculate local matrix
-        std::vector<double> collectSourceVals; collectSourceVals.reserve(numElemNodes);
         auto nodes = elm->nodes;
-        for (int i=nodes[0]; i<=nodes[1]; i++) {
-            collectSourceVals.push_back(fEval[i]);
-        }
+        std::vector<double> collectSourceVals; collectSourceVals.reserve(numElemNodes);
+        collectSourceVals.insert(collectSourceVals.begin(), fEval.begin()+nodes[0], fEval.begin()+nodes[1]+1);
+        // for (int i=nodes[0]; i<=nodes[1]; i++) {
+        //     collectSourceVals.push_back(fEval[i]);
+        // }
         Eigen::Map<DvD> sourceVector(collectSourceVals.data(), numElemNodes, 1);
 
         localElemMat = weightMat*sourceVector*jac*jac;
@@ -482,14 +484,16 @@ SpD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
         
         // Generate i,j,v triplets
         for (int i=0; i<numElemNodes; i++) {
-            tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
+            // tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
+            out[nodes[0]+i] = localElemMat[i];
         }  
     }
 
     // Declare and construct sparse matrix from triplets
-    SpD mat(nNodes,1);
-    mat.setFromTriplets(tripletList.begin(), tripletList.end());
-    return mat;
+    // SpD mat(nNodes,1);
+    // mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    // mat.makeCompressed();
+    return out;
 }
 
 std::vector<double> ComputeResiduals(QTM::QuadTreeMesh& mesh, DvD& solution, SpD& source) {
@@ -578,7 +582,7 @@ void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
     columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
 }
 
-DvD ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, SpD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals) {
+DvD ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals) {
     // Eliminate rows and columns corr. to boundary nodes
     SpD columnSpaceT = (SpD)(columnSpace.transpose());
     SpD nullSpaceT = (SpD)(nullSpace.transpose());
@@ -588,7 +592,7 @@ DvD ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, SpD& fVec, SpD& column
     // Eliminate boundary rows and free columns
     SpD A12 = columnSpaceT * StiffnessMatrix * nullSpace;
     // Eliminate boundary rows
-    SpD F11 = columnSpaceT * fVec;
+    DvD F11 = columnSpaceT * fVec;
 
     using namespace Eigen;
 
@@ -627,7 +631,7 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     SpD StiffnessMatrix = KMatrix - SMatrix - SMatrixT + PMatrix;
 
     std::cout<<"Assembling RHS vector"<<std::endl;
-    SpD FMatrix = AssembleFVec(inputMesh, 1.0, source);
+    DvD FMatrix = AssembleFVec(inputMesh, 1.0, source);
     std::cout<<"Assembling boundary condition vector"<<std::endl;
     DvD boundaryVals = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, bcs);
 
