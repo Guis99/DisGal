@@ -398,7 +398,7 @@ DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh,
     return (DvD)boundaryNodeValuesVec;
 }
 
-DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
+DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
                 double mu,
                 double penaltyParam,
@@ -409,42 +409,54 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 std::vector<std::string> Nbcs,
                 std::vector<std::vector<int>>& boundaryNodes,
                 std::vector<bool> velEss,
-                std::vector<bool> pEss) {
+                std::vector<bool> pressEss,
+                std::vector<bool> natBC) {
     std::vector<int> freeNodes = inputMesh.freeNodes;
     int nNodes = inputMesh.nNodes();
     int offset1 = nNodes;
 
-    std::cout<<"Assembling stiffness matrix..."<<std::endl;
-    SpD KMatrix = StiffnessMatrix(inputMesh, mu);
-    std::cout<<"Assembling divergence matrix..."<<std::endl;
+    std::cout<<"Assembling stiffness matrix...";
+    SpD KMatrix = StiffnessMatrix(inputMesh, mu); 
+    std::cout<<" finished!"<<std::endl;
+    
+    std::cout<<"Assembling divergence matrix...";
     SpD QVMatrixX = QVMatrix(inputMesh, 1);
-    SpD QVMatrixY = QVMatrix(inputMesh, 2);
-    std::cout<<"Assembling penalty matrix..."<<std::endl;
-    SpD PMatrix = PenaltyMatrix(inputMesh, mu, penaltyParam);
-    std::cout<<"Assembling flux matrix..."<<std::endl;
-    SpD SMatrix = FluxMatrix(inputMesh, mu);
-    std::cout<<"Assembling pressure flux matrix..."<<std::endl;
-    SpD PFMatrixX = PressureFluxMatrix(inputMesh, 1);
-    SpD PFMatrixY = PressureFluxMatrix(inputMesh, 2);
+    SpD QVMatrixY = QVMatrix(inputMesh, 2); 
+    std::cout<<" finished!"<<std::endl;
 
-    std::cout<<"Assembling combined LHS matrix..."<<std::endl;
-    SpD SMatrixT = (SpD)(SMatrix.transpose());
+    std::cout<<"Assembling penalty matrix...";
+    SpD PMatrix = PenaltyMatrix(inputMesh, mu, penaltyParam); 
+    std::cout<<" finished!"<<std::endl;
+
+    std::cout<<"Assembling flux matrix...";
+    SpD SMatrix = FluxMatrix(inputMesh, mu); 
+    std::cout<<" finished!"<<std::endl;
+
+    std::cout<<"Assembling pressure flux matrix...";
+    SpD PFMatrixX = PressureFluxMatrix(inputMesh, 1);
+    SpD PFMatrixY = PressureFluxMatrix(inputMesh, 2); 
+    std::cout<<" finished!"<<std::endl;
+
+    std::cout<<"Assembling combined LHS matrix...";
+    SpD SMatrixT = (SpD)(SMatrix.transpose()); 
     SpD dgPoissonMat = KMatrix + PMatrix - SMatrix - SMatrixT;
 
     SpD combinedQVMatrixX = QVMatrixX + PFMatrixX;
     SpD combinedQVMatrixY = QVMatrixY + PFMatrixY;
-    SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, 
-                            dgPoissonMat, combinedQVMatrixX, combinedQVMatrixY);
+    SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, dgPoissonMat, 
+                                        combinedQVMatrixX, combinedQVMatrixY); std::cout<<" finished!"<<std::endl;
 
-    std::cout<<"Assembling RHS vector..."<<std::endl;
+    std::cout<<"Assembling RHS vector...";
     DvD FMatrixX = AssembleFVec(inputMesh, 1.0, source[0]);
     DvD FMatrixY = AssembleFVec(inputMesh, 1.0, source[1]);
     DvD FMatrix = AssembleStokesSource(inputMesh, FMatrixX, FMatrixY);
-    std::cout<<"Assembling boundary condition vector..."<<std::endl;
-    std::vector<int> allBoundaryNodes; // boundary dofs, *not* mesh nodes, where dirichlet bcs are applied 
+    std::cout<<" finished!"<<std::endl;
+
+    std::cout<<"Assembling boundary condition vector...";
+    std::vector<int> allBoundaryNodes; // boundary dofs, *NOT* mesh nodes, where dirichlet bcs are applied 
     std::vector<std::vector<int>> VDN; // mesh nodes where velocity is fixed
     std::vector<std::vector<int>> PDN; // mesh nodes where pressure is fixed
-    std::vector<int> freeNodesAll; freeNodesAll.reserve(3*freeNodes.size()); // interior and neumann dofs, *not* mesh nodes
+    std::vector<int> freeNodesAll; freeNodesAll.reserve(3*freeNodes.size()); // interior and neumann dofs, *NOT* mesh nodes
     for (int i=0; i<boundaryNodes.size(); i++) {
         if (velEss[i]) {
             VDN.push_back(boundaryNodes[i]);
@@ -455,7 +467,7 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
             }
         }
 
-        if (pEss[i]) {
+        if (pressEss[i]) {
             PDN.push_back(boundaryNodes[i]);
         } else {
             for (int vn : boundaryNodes[i]) {
@@ -466,9 +478,11 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     DvD UDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Ubcs, allBoundaryNodes, 0);
     DvD VDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Vbcs, allBoundaryNodes, 1);
     DvD PDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, PDN, Pbcs, allBoundaryNodes, 2);
-    DvD dirichletBoundaryVals(UDirichlet.cols() + VDirichlet.cols() + PDirichlet.cols());
+    DvD dirichletBoundaryVals(2*UDirichlet.cols() + PDirichlet.cols());
+    dirichletBoundaryVals << UDirichlet, VDirichlet, PDirichlet;
+    std::cout<<" finished!"<<std::endl;
 
-    std::cout<<"Assembling null-orth matrix..."<<std::endl;
+    std::cout<<"Assembling null-orth matrix...";
     for (int i=0; i<3; i++) {
         int offset = i*nNodes;
         for (int fn : freeNodes) {
@@ -480,8 +494,10 @@ DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     SpD nullSpace(3*nNodes+1, allBoundaryNodes.size());
     SpD columnSpace(3*nNodes+1, freeNodesAll.size());
     GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodesAll, nullSpace, columnSpace);
-    std::cout<<"Solving system with "<<3*freeNodes.size()<<" degrees of freedom..."<<std::endl;
-    DD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
+    std::cout<<" finished!"<<std::endl;
+
+    std::cout<<"Solving system with "<<3*freeNodes.size()<<" degrees of freedom...";
+    DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
     std::cout<<"System solved!"<<std::endl;
     return x;
 }

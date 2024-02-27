@@ -16,15 +16,19 @@ DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh,
                                     std::vector<int>& allBoundaryNodes, 
                                     int offset);
 
-DD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
+DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
                 double mu,
+                double penaltyParam,
                 std::vector<std::string> source,
                 std::vector<std::string> Ubcs,
                 std::vector<std::string> Vbcs,
                 std::vector<std::string> Pbcs,
                 std::vector<std::string> Nbcs,
-                double penaltyParam);
+                std::vector<std::vector<int>>& boundaryNodes,
+                std::vector<bool> velEss,
+                std::vector<bool> pressEss,
+                std::vector<bool> natBC);
 
 DD IncompressibleNavierStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
