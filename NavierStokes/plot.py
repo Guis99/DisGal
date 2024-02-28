@@ -8,7 +8,7 @@ import subprocess
 
 # discretization parameters
 deg = 2
-div = 4
+div = 8
 Lx = 1
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
@@ -46,7 +46,6 @@ def draw_cell_nr(cell, ax):
         topLeftY = child['y'] - half_side_length
 
         rect = patches.Rectangle((topLeftX, topLeftY), child['width'], child['width'], linewidth=.2, edgecolor='black', facecolor='none')
-        ax.text(child['x'], child['y'], str(child['CID']), ha='center', va='center', fontsize=8, color='black')
 
         ax.add_patch(rect)
 
@@ -74,9 +73,12 @@ pi = griddata((x, y), p, (xi, yi), method='cubic')
 print("Plotting data")
 # # Step 3: Plot the contour
 fig,ax=plt.subplots()
-plt.contourf(xi, yi, pi, levels=15, cmap=plt.cm.jet)
-plt.colorbar()  # Show color scale
-# plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
+c1=plt.contourf(xi, yi, pi, levels=15, cmap=plt.cm.jet)
+cb1 = fig.colorbar(c1)
+cb1.set_label('Pressure')
+c2=plt.quiver(x, y, u, v, angles='xy', scale_units='xy', scale=5)
+cb2 = fig.colorbar(c2)  # Show color scale
+cb2.set_label('Velocity magnitude')
 plt.xlabel('X')
 plt.ylabel('Y')
 plt.title('Contour plot')

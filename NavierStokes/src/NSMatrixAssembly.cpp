@@ -268,8 +268,6 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
     int totalNNZ = 2*dgPoissonMat.nonZeros() + 2*QVMatrixX.nonZeros() + 2*QVMatrixY.nonZeros() + 2*nNodes;
     std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
 
-    std::cout<<"here1"<<std::endl;
-
     // insert diffusive terms
     for (int k = 0; k < dgPoissonMat.outerSize(); ++k) {
         for (SpD::InnerIterator it(dgPoissonMat, k); it; ++it) {
@@ -277,8 +275,6 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
             tripletList.emplace_back(it.row()+offset1, it.col()+offset1, it.value());
         }
     }
-
-    std::cout<<"here2"<<std::endl;
 
     // insert pressure/divergence terms
     for (int k = 0; k < QVMatrixX.outerSize(); ++k) {
@@ -288,8 +284,6 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
         }
     }
 
-    std::cout<<"here3"<<std::endl;
-
     for (int k = 0; k < QVMatrixY.outerSize(); ++k) {
         for (SpD::InnerIterator it(QVMatrixY, k); it; ++it) {
             tripletList.emplace_back(it.row()+offset1, it.col()+offset2, it.value());
@@ -297,10 +291,8 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
         }
     }
 
-    std::cout<<"here4"<<std::endl;
-
     // add zero mean pressure constraint 
-    int currDofIndx = offset3;
+    int currDofIndx = offset2;
     auto weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, mesh.deg+1, mesh.deg+1, numElemNodes);
     std::vector<double> weights(weightMat.diagonal().begin(), weightMat.diagonal().end());
     for (auto elm : mesh.leaves) {
@@ -385,9 +377,8 @@ DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh,
     std::vector<double> boundaryCalc;
     std::array<double,2> *currPointer = boundaryNodePos.data();
     int ptrIncr;
-    std::string prompt;
 
-    for (int i=0; i<4; i++) {
+    for (int i=0; i<boundaryNodes.size(); i++) {
         ptrIncr = boundaryNodes[i].size();
         // Take bcFunc and evaluate it
         boundaryCalc = Utils::EvalSymbolicBC(currPointer, ptrIncr, strs[i]);
@@ -426,8 +417,8 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<" finished!"<<std::endl;
     
     std::cout<<"Assembling divergence matrix...";
-    SpD QVMatrixX = QVMatrix(inputMesh, 1);
-    SpD QVMatrixY = QVMatrix(inputMesh, 2); 
+    SpD QVMatrixX = -QVMatrix(inputMesh, 1);
+    SpD QVMatrixY = -QVMatrix(inputMesh, 2); 
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling penalty matrix...";
@@ -466,6 +457,7 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     for (int i=0; i<boundaryNodes.size(); i++) {
         if (velEss[i]) {
             VDN.push_back(boundaryNodes[i]);
+            continue;
         } else {
             for (int vn : boundaryNodes[i]) {
                 freeNodesAll.push_back(vn);
@@ -484,8 +476,10 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     DvD UDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Ubcs, allBoundaryNodes, 0);
     DvD VDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Vbcs, allBoundaryNodes, 1);
     DvD PDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, PDN, Pbcs, allBoundaryNodes, 2);
-    DvD dirichletBoundaryVals(2*UDirichlet.cols() + PDirichlet.cols());
-    dirichletBoundaryVals << UDirichlet, VDirichlet, PDirichlet;
+    DvD dirichletBoundaryVals(2*UDirichlet.rows() + PDirichlet.rows());
+    dirichletBoundaryVals << UDirichlet, 
+                            VDirichlet, 
+                            PDirichlet;
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling null-orth matrix...";
