@@ -125,8 +125,6 @@ SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
 
-    DD topRowVec = DD::Zero(1,numNodes); topRowVec(0,0) = 1;
-    DD bottomRowVec = DD::Zero(1,numNodes); bottomRowVec(0,deg) = 1;
     std::array<DD,4> splitCellValsT;
 
     DD splitCellPlaceholderT(mesh.halfGaussPoints.size(), numElemNodes);
@@ -270,6 +268,8 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
     int totalNNZ = 2*dgPoissonMat.nonZeros() + 2*QVMatrixX.nonZeros() + 2*QVMatrixY.nonZeros() + 2*nNodes;
     std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
 
+    std::cout<<"here1"<<std::endl;
+
     // insert diffusive terms
     for (int k = 0; k < dgPoissonMat.outerSize(); ++k) {
         for (SpD::InnerIterator it(dgPoissonMat, k); it; ++it) {
@@ -277,6 +277,8 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
             tripletList.emplace_back(it.row()+offset1, it.col()+offset1, it.value());
         }
     }
+
+    std::cout<<"here2"<<std::endl;
 
     // insert pressure/divergence terms
     for (int k = 0; k < QVMatrixX.outerSize(); ++k) {
@@ -286,12 +288,16 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
         }
     }
 
+    std::cout<<"here3"<<std::endl;
+
     for (int k = 0; k < QVMatrixY.outerSize(); ++k) {
         for (SpD::InnerIterator it(QVMatrixY, k); it; ++it) {
             tripletList.emplace_back(it.row()+offset1, it.col()+offset2, it.value());
             tripletList.emplace_back(it.col()+offset2, it.row()+offset1, it.value());
         }
     }
+
+    std::cout<<"here4"<<std::endl;
 
     // add zero mean pressure constraint 
     int currDofIndx = offset3;

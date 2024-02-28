@@ -6,16 +6,37 @@ import matplotlib.patches as patches
 
 import subprocess
 
+# discretization parameters
+deg = 2
 div = 4
-force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
-zero = "10"
+Lx = 1
+Ly = 1
+meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
+
+# SIPG penalty param
+penalty = 90
+
+# forcing terms in x and y directions
+forces = ["0","0"]
+
+# setting up boundary conditions
+numBoundaries = 4
+velDir = ["1","1","1","1"]
+pressDir = ["0","0","0","0"]
+nat = ["0","0","0","0"]
+
+# dirichlet boundary conditions for x and y velocity and pressure
+u = ["1","0","0","0"]
+v = ["0","0","0","0"]
+p = []
+
+# natural (outlet and free) boundary conditions
+natBC = []
 
 exeSelect = 2
-toRun = ".\main.exe" if exeSelect == 1 else ".\mainSplit.exe"
+toRun = ".\mainStokes.exe"
 
-div2 = 4
-subprocess.run([toRun, "2", str(div), str(div), "1", "1", "100*x*y", "sin(pi*x)", "-sin(3*pi*y)", "sin(pi*x)", "-sin(3*pi*y)", "90"]) 
-# subprocess.run([toRun, "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "50"])  
+subprocess.run([toRun, *meshInfo, str(penalty), *forces, str(numBoundaries), *velDir, *pressDir, *nat, *u, *v, *p, *natBC]) 
 
 def draw_cell_nr(cell, ax):
     # Adjusting for the center coordinates and level-dependent size
@@ -34,7 +55,9 @@ print("Loading results")
 data = np.loadtxt('output.txt', delimiter=',')
 x = data[:, 0]
 y = data[:, 1]
-z = data[:, 2]
+u = data[:, 2]
+v = data[:, 3]
+p = data[:, 4]
 
 # Step 2: Interpolate your data onto a regular grid
 # Create grid coordinates
@@ -44,12 +67,14 @@ yi = np.linspace(min(y), max(y), 100)
 xi, yi = np.meshgrid(xi, yi)
 
 # Interpolate z values on the grid
-zi = griddata((x, y), z, (xi, yi), method='cubic')
+ui = griddata((x, y), u, (xi, yi), method='cubic')
+vi = griddata((x, y), v, (xi, yi), method='cubic')
+pi = griddata((x, y), p, (xi, yi), method='cubic')
 
 print("Plotting data")
 # # Step 3: Plot the contour
 fig,ax=plt.subplots()
-plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
+plt.contourf(xi, yi, pi, levels=15, cmap=plt.cm.jet)
 plt.colorbar()  # Show color scale
 # plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
 plt.xlabel('X')
