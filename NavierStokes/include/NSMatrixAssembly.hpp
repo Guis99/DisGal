@@ -4,8 +4,11 @@
 #define MatrixAssembly_NS
 
 // Incompressible
-SpD QVMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
+SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
+SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
+SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
 SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
+SpD PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu);
 SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&& P);
 SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state);
 
@@ -15,6 +18,22 @@ DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh,
                                     std::vector<std::string>& strs, 
                                     std::vector<int>& allBoundaryNodes, 
                                     int offset);
+
+SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
+                            SpD& dgPoissonMat,
+                            SpD& mat1, 
+                            SpD& mat2,
+                            SpD& mat1T,
+                            SpD& mat2T);
+
+SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
+                            SpD& dgPoissonMat,
+                            SpD& QVMatrixX, 
+                            SpD& QVMatrixY);
+
+DvD AssembleStokesSource(QTM::QuadTreeMesh& mesh, 
+                            DvD& XSource,
+                            DvD& YSource);
 
 DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,

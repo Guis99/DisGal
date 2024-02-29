@@ -1,7 +1,7 @@
 #include "..\include\NSMatrixAssembly.hpp"
 
-SpD QVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
-    // Oriented as V-P. For Q-U, take transpose
+SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+    // Oriented as V-P.
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
@@ -67,6 +67,488 @@ SpD QVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
             }
         }
 
+    }
+    // Declare and construct sparse matrix from triplets
+    SpD mat(nNodes,nNodes);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    return mat;
+}
+
+SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+    // pressure jump, velocity flux average, U-Q
+    int deg = mesh.deg;
+    int numNodes = deg+1;
+    int numElemNodes = mesh.numElemNodes;
+    int nElements = mesh.numLeaves;
+    int nNodes = mesh.nNodes();
+    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+
+    // get quad weights in 1D
+    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+
+    // Convert 1D quad weights to diag matrix
+    Eigen::Map<DvD> integXMat(integX.data(),numNodes);
+    DD quadWeights1D = (DD)integXMat.asDiagonal();
+
+    // basis func to node mapping
+    DD B; B.setIdentity(numElemNodes, numElemNodes);
+    DD Bs; Bs.setIdentity(numNodes, numNodes);
+
+    // get basis func vals for split cell quad
+    std::vector<double> BhInitializer; 
+    BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
+
+    // get unit vecs
+    DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
+    DvD bottomVec = DvD::Zero(numNodes); bottomVec(deg) = 1;
+
+    DD topRowVec = DD::Zero(1,numNodes); topRowVec(0,0) = 1;
+    DD bottomRowVec = DD::Zero(1,numNodes); bottomRowVec(0,deg) = 1;
+
+    DD fullRowVec = DD::Ones(1,numNodes);
+
+    // Generate values for each basis function, copy to full array
+    for (int k=0; k<numNodes; k++) { 
+        std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
+        BhInitializer.insert(BhInitializer.end(), xVals.begin(), xVals.end());
+    }
+
+    // map basis values to matrix
+    Eigen::Map<DD> BhT(BhInitializer.data(), mesh.halfGaussPoints.size(), numNodes); // eval points are traversed first
+    DD Bh = (DD)(BhT.transpose());
+
+    std::array<DD,4> splitCellVals;
+
+    DD splitCellPlaceholder(numElemNodes, mesh.halfGaussPoints.size());
+    splitCellPlaceholder << Eigen::kroneckerProduct(bottomVec, Bh); splitCellVals[0] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(Bh, bottomVec); splitCellVals[1] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
+
+    std::array<DD,4> splitCellValsT;
+
+    DD splitCellPlaceholderT(mesh.halfGaussPoints.size(), numElemNodes);
+    splitCellPlaceholderT << Eigen::kroneckerProduct(bottomRowVec, BhT); splitCellValsT[0] = splitCellPlaceholderT;
+    splitCellPlaceholderT << Eigen::kroneckerProduct(BhT, bottomRowVec); splitCellValsT[1] = splitCellPlaceholderT;
+    splitCellPlaceholderT << Eigen::kroneckerProduct(topRowVec, BhT); splitCellValsT[2] = splitCellPlaceholderT;
+    splitCellPlaceholderT << Eigen::kroneckerProduct(BhT, topRowVec); splitCellValsT[3] = splitCellPlaceholderT;
+
+    // index vectors for split cell gauss points
+    std::vector<int> frontIdxs(numNodes, 0);  
+    std::vector<int> backIdxs(numNodes, 0);
+
+    for (int i=0; i<numNodes; i++) {
+        frontIdxs[i] = i;
+        backIdxs[i] = i+deg;
+    }
+
+    std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
+
+    double normals[4] = {0,0,0,0};
+    double normalsX[4] = {0,1,0,-1};
+    double normalsY[4] = {1,0,-1,0};
+    switch (diffDir) {
+        case 1: {
+            std::copy(normalsX, normalsX+4, normals);
+            break;
+        }
+        case 2: {
+            std::copy(normalsY, normalsY+4, normals);
+            break;
+        }
+    }
+
+    std::vector<int> boundaryNodes;
+    std::vector<int> neighborNodes;
+    std::vector<int> neighborLocals;
+    std::vector<int> elemNodes;
+    std::vector<int> elemLocals;
+    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    auto leaves = mesh.GetAllCells();
+    std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
+                                                QTM::Direction::S, QTM::Direction::W};
+
+    std::vector<QTM::Direction> oppdirs = {QTM::Direction::S, QTM::Direction::W, 
+                                            QTM::Direction::N, QTM::Direction::E};
+
+    std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::E),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::S),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
+    for (auto &elm : leaves) {
+        elemNodes = mesh.GetGlobalElemNodes(elm->CID);
+        elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
+        // get neighbors
+        for (auto dir : directions) {
+            neighbors = mesh.GetCellNeighbors(dir, elm->CID);
+            if (neighbors.size() == 0) {
+                continue;
+            }
+            QTM::Direction oppdir = oppdirs[dir];
+            for (int NI = 0; NI < neighbors.size(); NI++) { 
+                auto neighbor = neighbors[NI];
+                auto jac = std::min(elm->width, neighbor->width);
+                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                    neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
+                    neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                } else { 
+                    continue;
+                }
+                // jump matrix setup
+                DD topJump;
+                DD bottomJump = -B(neighborLocals, localNodes[oppdir]);
+
+                DD topFlux;
+                DD bottomFlux = normals[oppdir] * B(localNodes[oppdir], neighborLocals);
+
+                if (elm->level == neighbor->level) {
+                    topJump = B(elemLocals, localNodes[dir]);
+                    topFlux = normals[dir] * B(localNodes[dir], elemLocals);
+                } else {
+                    topJump = splitCellVals[dir](elemLocals, splitIdx[NI]);
+                    topFlux = normals[dir] * splitCellValsT[dir](splitIdx[NI], elemLocals);
+                }
+
+                // calculate jump matrix
+                DD jumpMatrix(elemNodes.size() + neighborNodes.size(), numNodes);
+                jumpMatrix << topJump, bottomJump;
+
+                // calculate flux matrix
+                DD fluxMatrix(numNodes, elemNodes.size() + neighborNodes.size());
+                fluxMatrix << topFlux, bottomFlux;
+
+                boundaryNodes.reserve(elemNodes.size() + neighborNodes.size()); // aggregated nodes in current and neighbor cell
+                boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
+                boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
+
+                // assemble local matrix 
+                DD localElemMat = (DD)(.5 * jac * jumpMatrix *  quadWeights1D * fluxMatrix);
+
+                for (int j=0; j<boundaryNodes.size(); j++) {
+                    for (int i=0; i<boundaryNodes.size(); i++) {
+                        if (localElemMat(i,j) != 0) {
+                            tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                        }
+                    }
+                }
+            boundaryNodes.clear();
+            }
+        }
+    }
+    // Declare and construct sparse matrix from triplets
+    SpD mat(nNodes,nNodes);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    return mat;
+}
+
+SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+    // pressure average, velocity flux jump, V-P
+    int deg = mesh.deg;
+    int numNodes = deg+1;
+    int numElemNodes = mesh.numElemNodes;
+    int nElements = mesh.numLeaves;
+    int nNodes = mesh.nNodes();
+    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+
+    // get quad weights in 1D
+    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+
+    // Convert 1D quad weights to diag matrix
+    Eigen::Map<DvD> integXMat(integX.data(),numNodes);
+    DD quadWeights1D = (DD)integXMat.asDiagonal();
+
+    // basis func to node mapping
+    DD B; B.setIdentity(numElemNodes, numElemNodes);
+    DD Bs; Bs.setIdentity(numNodes, numNodes);
+
+    // get basis func vals for split cell quad
+    std::vector<double> BhInitializer; 
+    BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
+
+    // get unit vecs
+    DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
+    DvD bottomVec = DvD::Zero(numNodes); bottomVec(deg) = 1;
+
+    DD topRowVec = DD::Zero(1,numNodes); topRowVec(0,0) = 1;
+    DD bottomRowVec = DD::Zero(1,numNodes); bottomRowVec(0,deg) = 1;
+
+    DD fullRowVec = DD::Ones(1,numNodes);
+
+    // Generate values for each basis function, copy to full array
+    for (int k=0; k<numNodes; k++) { 
+        std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
+        BhInitializer.insert(BhInitializer.end(), xVals.begin(), xVals.end());
+    }
+
+    // map basis values to matrix
+    Eigen::Map<DD> BhT(BhInitializer.data(), mesh.halfGaussPoints.size(), numNodes); // eval points are traversed first
+    DD Bh = (DD)(BhT.transpose());
+
+    std::array<DD,4> splitCellVals;
+
+    DD splitCellPlaceholder(numElemNodes, mesh.halfGaussPoints.size());
+    splitCellPlaceholder << Eigen::kroneckerProduct(bottomVec, Bh); splitCellVals[0] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(Bh, bottomVec); splitCellVals[1] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
+
+    std::array<DD,4> splitCellValsT;
+
+    DD splitCellPlaceholderT(mesh.halfGaussPoints.size(), numElemNodes);
+    splitCellPlaceholderT << Eigen::kroneckerProduct(bottomRowVec, BhT); splitCellValsT[0] = splitCellPlaceholderT;
+    splitCellPlaceholderT << Eigen::kroneckerProduct(BhT, bottomRowVec); splitCellValsT[1] = splitCellPlaceholderT;
+    splitCellPlaceholderT << Eigen::kroneckerProduct(topRowVec, BhT); splitCellValsT[2] = splitCellPlaceholderT;
+    splitCellPlaceholderT << Eigen::kroneckerProduct(BhT, topRowVec); splitCellValsT[3] = splitCellPlaceholderT;
+
+    // index vectors for split cell gauss points
+    std::vector<int> frontIdxs(numNodes, 0);  
+    std::vector<int> backIdxs(numNodes, 0);
+
+    for (int i=0; i<numNodes; i++) {
+        frontIdxs[i] = i;
+        backIdxs[i] = i+deg;
+    }
+
+    std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
+
+    double normals[4] = {0,0,0,0};
+    double normalsX[4] = {0,1,0,-1};
+    double normalsY[4] = {1,0,-1,0};
+    switch (diffDir) {
+        case 1: {
+            std::copy(normalsX, normalsX+4, normals);
+            break;
+        }
+        case 2: {
+            std::copy(normalsY, normalsY+4, normals);
+            break;
+        }
+    }
+
+    std::vector<int> boundaryNodes;
+    std::vector<int> neighborNodes;
+    std::vector<int> neighborLocals;
+    std::vector<int> elemNodes;
+    std::vector<int> elemLocals;
+    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    auto leaves = mesh.GetAllCells();
+    std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
+                                                QTM::Direction::S, QTM::Direction::W};
+
+    std::vector<QTM::Direction> oppdirs = {QTM::Direction::S, QTM::Direction::W, 
+                                            QTM::Direction::N, QTM::Direction::E};
+
+    std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::E),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::S),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
+    for (auto &elm : leaves) {
+        elemNodes = mesh.GetGlobalElemNodes(elm->CID);
+        elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
+        // get neighbors
+        for (auto dir : directions) {
+            neighbors = mesh.GetCellNeighbors(dir, elm->CID);
+            if (neighbors.size() == 0) {
+                continue;
+            }
+            QTM::Direction oppdir = oppdirs[dir];
+            for (int NI = 0; NI < neighbors.size(); NI++) { 
+                auto neighbor = neighbors[NI];
+                auto jac = std::min(elm->width, neighbor->width);
+                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                    neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
+                    neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                } else { 
+                    continue;
+                }
+                // jump matrix setup
+                DD topJump;
+                DD bottomJump = -normals[oppdir] * B(neighborLocals, localNodes[oppdir]);
+
+                DD topAvg;
+                DD bottomAvg =  B(localNodes[oppdir], neighborLocals);
+
+                if (elm->level == neighbor->level) {
+                    topJump = normals[dir] * B(elemLocals, localNodes[dir]);
+                    topAvg = B(localNodes[dir], elemLocals);
+                } else {
+                    topJump = normals[dir] * splitCellVals[dir](elemLocals, splitIdx[NI]);
+                    topAvg = splitCellValsT[dir](splitIdx[NI], elemLocals);
+                }
+
+                // calculate jump matrix
+                DD jumpMatrix(elemNodes.size() + neighborNodes.size(), numNodes);
+                jumpMatrix << topJump, bottomJump;
+
+                // calculate flux matrix
+                DD fluxMatrix(numNodes, elemNodes.size() + neighborNodes.size());
+                fluxMatrix << topAvg, bottomAvg;
+
+                boundaryNodes.reserve(elemNodes.size() + neighborNodes.size()); // aggregated nodes in current and neighbor cell
+                boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
+                boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
+
+                // assemble local matrix 
+                DD localElemMat = (DD)(.5 * jac * jumpMatrix * quadWeights1D * fluxMatrix);
+
+                for (int j=0; j<boundaryNodes.size(); j++) {
+                    for (int i=0; i<boundaryNodes.size(); i++) {
+                        if (localElemMat(i,j) != 0) {
+                            tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                        }
+                    }
+                }
+            boundaryNodes.clear();
+            }
+        }
+    }
+    // Declare and construct sparse matrix from triplets
+    SpD mat(nNodes,nNodes);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    return mat;
+}
+
+SpD PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu) {
+    int deg = mesh.deg;
+    int numNodes = deg+1;
+    int numElemNodes = mesh.numElemNodes;
+    int nElements = mesh.numLeaves;
+    int nNodes = mesh.nNodes();
+
+    // basis func to node mapping
+    DD B; B.setIdentity(numElemNodes, numElemNodes);
+
+    // get basis func vals for split cell quad
+    std::vector<double> BhInitializer; 
+    BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
+
+    // get unit vecs
+    DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
+    DvD bottomVec = DvD::Zero(numNodes); bottomVec(deg) = 1;
+
+    // Generate values for each basis function, copy to full array
+    for (int k=0; k<numNodes; k++) { 
+        std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
+        BhInitializer.insert(BhInitializer.end(), xVals.begin(), xVals.end());
+    }
+
+    // map basis values to matrix
+    Eigen::Map<DD> BhT(BhInitializer.data(), mesh.halfGaussPoints.size(), numNodes); // eval points are traversed first
+    DD Bh = (DD)(BhT.transpose());
+
+    std::array<DD,4> splitCellVals;
+
+    DD splitCellPlaceholder(numElemNodes, mesh.halfGaussPoints.size());
+    splitCellPlaceholder << Eigen::kroneckerProduct(bottomVec, Bh); splitCellVals[0] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(Bh, bottomVec); splitCellVals[1] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(topVec, Bh); splitCellVals[2] = splitCellPlaceholder;
+    splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
+
+    // index vectors for split cell gauss points
+    std::vector<int> frontIdxs(numNodes, 0);  
+    std::vector<int> backIdxs(numNodes, 0);
+
+    for (int i=0; i<numNodes; i++) {
+        frontIdxs[i] = i;
+        backIdxs[i] = i+deg;
+    }
+
+    std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
+    
+    // get quad weights in 1D
+    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+
+    // Convert 1D quad weights to diag matrix
+    Eigen::Map<DvD> integXMat(integX.data(),numNodes);
+    DD quadWeights1D = (DD)integXMat.asDiagonal();
+
+    auto leaves = mesh.leaves;
+    std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
+                                                QTM::Direction::S, QTM::Direction::W};
+
+                                                
+    std::vector<QTM::Direction> oppdirs = {QTM::Direction::S, QTM::Direction::W, 
+                                            QTM::Direction::N, QTM::Direction::E};
+
+    std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::E),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::S),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
+
+    double a; // penalty parameters
+
+    std::vector<int> boundaryNodes;
+    std::vector<int> neighborNodes;
+    std::vector<int> neighborLocals;
+    std::vector<int> elemNodes;
+    std::vector<int> elemLocals;
+    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    for (auto &elm : leaves) {
+        elemNodes = mesh.GetGlobalElemNodes(elm->CID);
+        elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
+        // std::cout<<"-----------"<<std::endl;
+        // std::cout<<"elem: "<<elm->CID<<std::endl;
+        // for (auto i : elemNodes) {
+        //     std::cout<<i<<std::endl;
+        // }
+        // std::cout<<"neighbors:\n";
+        // get neighbors
+        for (auto dir : directions) {
+            // std::cout<<"neighbor in direction "<<dir<<std::endl;
+            QTM::Direction oppdir = oppdirs[dir];
+            neighbors = mesh.GetCellNeighbors(dir, elm->CID);
+            if (neighbors.size() == 0) {
+                continue;
+            }
+            for (int NI = 0; NI < neighbors.size(); NI++) { 
+                auto neighbor = neighbors[NI];
+                auto jac = std::min(elm->width, neighbor->width);
+                // calculate penalty param
+                a = 2*jac;
+                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                    neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
+                    neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                } else { 
+                    continue;
+                }
+                // calculate jump matrix
+                DD topJump;
+                DD bottomJump = -B(neighborLocals, localNodes[oppdir]);
+                if (elm->level == neighbor->level) {
+                    topJump = B(elemLocals, localNodes[dir]);
+                } else {
+                    topJump = splitCellVals[dir](elemLocals, splitIdx[NI]);
+                }
+            
+                DD jumpMatrix(elemNodes.size() + neighborNodes.size(), numNodes);
+                // std::cout<<topJump.rows()<<", "<<topJump.cols()<<std::endl;
+                // std::cout<<bottomJump.rows()<<", "<<bottomJump.cols()<<std::endl;
+                // std::cout<<elemNodes.size()<<", "<<neighborNodes.size()<<", "<<neighborLocals.size()<<std::endl;
+                // std::cout<<"-----------"<<std::endl;
+                jumpMatrix << topJump, bottomJump;
+
+                DD jumpMatrixT = (DD)(jumpMatrix.transpose());
+                DD localElemMat = (DD)(a * jumpMatrix * jac*quadWeights1D * jumpMatrixT);
+
+                boundaryNodes.reserve(elemNodes.size() + neighborNodes.size());
+                boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
+                boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
+
+                for (int j=0; j<boundaryNodes.size(); j++) {
+                    for (int i=0; i<boundaryNodes.size(); i++) {
+                        tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                    }
+                }    
+                boundaryNodes.clear();
+            }
+        }
     }
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
@@ -257,15 +739,20 @@ SpD GeneralizedNeumannBC(QTM::QuadTreeMesh& mesh, double mu) {
 
 SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
                             SpD& dgPoissonMat,
-                            SpD& QVMatrixX, 
-                            SpD& QVMatrixY) {
+                            SpD& mat1, 
+                            SpD& mat2,
+                            SpD& mat1T,
+                            SpD& mat2T) {
     int nNodes = mesh.nNodes();
     int offset1 = nNodes; 
     int offset2 = 2*nNodes;
     int offset3 = 3*nNodes;
     int numElemNodes = mesh.numElemNodes;
     std::vector<double> gaussPoints = mesh.gaussPoints;
-    int totalNNZ = 2*dgPoissonMat.nonZeros() + 2*QVMatrixX.nonZeros() + 2*QVMatrixY.nonZeros() + 2*nNodes;
+    SpD PressurePenalty = PressurePenaltyMatrix(mesh, 1);
+    int totalNNZ = 2*dgPoissonMat.nonZeros() + PressurePenalty.nonZeros() +
+                    mat1T.nonZeros() + mat2T.nonZeros() + 
+                    mat1.nonZeros() + mat2.nonZeros() + 2*nNodes;
     std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
 
     // insert diffusive terms
@@ -276,18 +763,33 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
         }
     }
 
-    // insert pressure/divergence terms
-    for (int k = 0; k < QVMatrixX.outerSize(); ++k) {
-        for (SpD::InnerIterator it(QVMatrixX, k); it; ++it) {
+    for (int k = 0; k < mat1.outerSize(); ++k) {
+        for (SpD::InnerIterator it(mat1, k); it; ++it) {
             tripletList.emplace_back(it.row(), it.col()+offset2, it.value());
-            tripletList.emplace_back(it.col()+offset2, it.row(), it.value());
         }
     }
 
-    for (int k = 0; k < QVMatrixY.outerSize(); ++k) {
-        for (SpD::InnerIterator it(QVMatrixY, k); it; ++it) {
+    for (int k = 0; k < mat2.outerSize(); ++k) {
+        for (SpD::InnerIterator it(mat2, k); it; ++it) {
             tripletList.emplace_back(it.row()+offset1, it.col()+offset2, it.value());
-            tripletList.emplace_back(it.col()+offset2, it.row()+offset1, it.value());
+        }
+    }
+
+    for (int k = 0; k < mat1T.outerSize(); ++k) {
+        for (SpD::InnerIterator it(mat1T, k); it; ++it) {
+            tripletList.emplace_back(it.row()+offset2, it.col(), it.value());
+        }
+    }
+
+    for (int k = 0; k < mat2T.outerSize(); ++k) {
+        for (SpD::InnerIterator it(mat2T, k); it; ++it) {
+            tripletList.emplace_back(it.row()+offset2, it.col()+offset1, it.value());
+        }
+    }
+
+    for (int k = 0; k < PressurePenalty.outerSize(); ++k) {
+        for (SpD::InnerIterator it(PressurePenalty, k); it; ++it) {
+            tripletList.emplace_back(it.row()+offset2, it.col()+offset2, it.value());
         }
     }
 
@@ -395,6 +897,60 @@ DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh,
     return (DvD)boundaryNodeValuesVec;
 }
 
+SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
+                            SpD& dgPoissonMat,
+                            SpD& QVMatrixX, 
+                            SpD& QVMatrixY) {
+    int nNodes = mesh.nNodes();
+    int offset1 = nNodes; 
+    int offset2 = 2*nNodes;
+    int offset3 = 3*nNodes;
+    int numElemNodes = mesh.numElemNodes;
+    std::vector<double> gaussPoints = mesh.gaussPoints;
+    int totalNNZ = 2*dgPoissonMat.nonZeros() + 2*QVMatrixX.nonZeros() + 2*QVMatrixY.nonZeros() + 2*nNodes;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
+
+    // insert diffusive terms
+    for (int k = 0; k < dgPoissonMat.outerSize(); ++k) {
+        for (SpD::InnerIterator it(dgPoissonMat, k); it; ++it) {
+            tripletList.emplace_back(it.row(), it.col(), it.value());
+            tripletList.emplace_back(it.row()+offset1, it.col()+offset1, it.value());
+        }
+    }
+
+    // insert pressure/divergence terms
+    for (int k = 0; k < QVMatrixX.outerSize(); ++k) {
+        for (SpD::InnerIterator it(QVMatrixX, k); it; ++it) {
+            tripletList.emplace_back(it.row(), it.col()+offset2, it.value());
+            tripletList.emplace_back(it.col()+offset2, it.row(), it.value());
+        }
+    }
+
+    for (int k = 0; k < QVMatrixY.outerSize(); ++k) {
+        for (SpD::InnerIterator it(QVMatrixY, k); it; ++it) {
+            tripletList.emplace_back(it.row()+offset1, it.col()+offset2, it.value());
+            tripletList.emplace_back(it.col()+offset2, it.row()+offset1, it.value());
+        }
+    }
+
+    // add zero mean pressure constraint 
+    int currDofIndx = offset2;
+    auto weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, mesh.deg+1, mesh.deg+1, numElemNodes);
+    std::vector<double> weights(weightMat.diagonal().begin(), weightMat.diagonal().end());
+    for (auto elm : mesh.leaves) {
+        double area = (elm->width * elm->width);
+        for (int i=0; i<numElemNodes; i++) {
+            tripletList.emplace_back(offset3, currDofIndx, area * weights[i]);
+            tripletList.emplace_back(currDofIndx, offset3, area * weights[i]);
+            currDofIndx++;
+        }
+    }
+
+    SpD mat(3*nNodes+1,3*nNodes+1);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    return mat;
+}
+
 DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
                 double mu,
@@ -417,8 +973,8 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<" finished!"<<std::endl;
     
     std::cout<<"Assembling divergence matrix...";
-    SpD QVMatrixX = -QVMatrix(inputMesh, 1);
-    SpD QVMatrixY = -QVMatrix(inputMesh, 2); 
+    SpD PVMatrixX = PVMatrix(inputMesh, 1);
+    SpD PVMatrixY = PVMatrix(inputMesh, 2); 
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling penalty matrix...";
@@ -430,18 +986,39 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling pressure flux matrix...";
-    SpD PFMatrixX = PressureFluxMatrix(inputMesh, 1);
-    SpD PFMatrixY = PressureFluxMatrix(inputMesh, 2); 
+    SpD PAMatrixX = PressureAvgMatrix(inputMesh, 1); // pressure average, velocity jump
+    SpD PAMatrixY = PressureAvgMatrix(inputMesh, 2);
+
+    SpD PJMatrixX = PressureJumpMatrix(inputMesh, 1); // pressure jump, velocity average
+    SpD PJMatrixY = PressureJumpMatrix(inputMesh, 2); 
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling combined LHS matrix...";
     SpD SMatrixT = (SpD)(SMatrix.transpose()); 
     SpD dgPoissonMat = KMatrix + PMatrix - SMatrix - SMatrixT;
 
-    SpD combinedQVMatrixX = QVMatrixX + PFMatrixX;
-    SpD combinedQVMatrixY = QVMatrixY + PFMatrixY;
+    // SpD combinedQUMatrixX = -PVMatrixX + PJMatrixX; // continuity
+    // SpD combinedQUMatrixY = -PVMatrixY + PJMatrixY;
+
+    // SpD combinedPVMatrixX = -PVMatrixX + PAMatrixX; // pressure gradient
+    // SpD combinedPVMatrixY = -PVMatrixY + PAMatrixY;
+
+    // SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, dgPoissonMat, 
+    //                         combinedPVMatrixX, combinedPVMatrixY,
+    //                         combinedQUMatrixX, combinedQUMatrixY); std::cout<<" finished!"<<std::endl;
+
+    SpD PJMatrixXT = PressureFluxMatrix(inputMesh, 1);
+    SpD PJMatrixYT = PressureFluxMatrix(inputMesh, 2);
+
+    SpD mat1 = -PVMatrixX + PJMatrixXT; // pressure gradient
+    SpD mat2 = -PVMatrixY + PJMatrixYT;
+
+    SpD mat1T = (SpD)(mat1.transpose()); // continuity
+    SpD mat2T = (SpD)(mat2.transpose());
+
     SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, dgPoissonMat, 
-                                        combinedQVMatrixX, combinedQVMatrixY); std::cout<<" finished!"<<std::endl;
+                            mat1, mat2,
+                            mat1T, mat2T); std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling RHS vector...";
     DvD FMatrixX = AssembleFVec(inputMesh, 1.0, source[0]);
@@ -496,7 +1073,7 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodesAll, nullSpace, columnSpace);
     std::cout<<" finished!"<<std::endl;
 
-    std::cout<<"Solving system with "<<3*freeNodes.size()<<" degrees of freedom...";
+    std::cout<<"Solving system with "<<3*freeNodes.size()<<" degrees of freedom... ";
     DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
     std::cout<<"System solved!"<<std::endl;
     return x;
@@ -522,15 +1099,15 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
 //     std::cout<<"Assembling stiffness matrix..."<<std::endl;
 //     SpD KMatrix = StiffnessMatrix(inputMesh, mu);
 //     std::cout<<"Assembling divergence matrix..."<<std::endl;
-//     SpD QVMatrixX = QVMatrix(inputMesh, 1);
-//     SpD QVMatrixY = QVMatrix(inputMesh, 2);
+//     SpD QUMatrixX = QUMatrix(inputMesh, 1);
+//     SpD QUMatrixY = QUMatrix(inputMesh, 2);
 //     std::cout<<"Assembling penalty matrix..."<<std::endl;
 //     SpD PMatrix = PenaltyMatrix(inputMesh, mu, penaltyParam);
 //     std::cout<<"Assembling flux matrix..."<<std::endl;
 //     SpD SMatrix = FluxMatrix(inputMesh, mu);
 //     std::cout<<"Assembling pressure flux matrix..."<<std::endl;
-//     SpD PFMatrixX = PressureFluxMatrix(inputMesh, 1);
-//     SpD PFMatrixY = PressureFluxMatrix(inputMesh, 2);
+//     SpD PJMatrixX = PressureJumpMatrix(inputMesh, 1);
+//     SpD PJMatrixY = PressureJumpMatrix(inputMesh, 2);
 
 
 //     std::cout<<"Assembling combined LHS matrix..."<<std::endl;

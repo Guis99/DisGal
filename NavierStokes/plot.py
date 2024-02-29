@@ -7,8 +7,8 @@ import matplotlib.patches as patches
 import subprocess
 
 # discretization parameters
-deg = 2
-div = 8
+deg = 1
+div = 16
 Lx = 1
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
@@ -50,7 +50,7 @@ def draw_cell_nr(cell, ax):
         ax.add_patch(rect)
 
 # Step 1: Load your data
-print("Loading results")
+print("Loading results...")
 data = np.loadtxt('output.txt', delimiter=',')
 x = data[:, 0]
 y = data[:, 1]
@@ -60,7 +60,7 @@ p = data[:, 4]
 
 # Step 2: Interpolate your data onto a regular grid
 # Create grid coordinates
-print("Interpolating data")
+print("Interpolating data...")
 xi = np.linspace(min(x), max(x), 100)
 yi = np.linspace(min(y), max(y), 100)
 xi, yi = np.meshgrid(xi, yi)
@@ -70,20 +70,27 @@ ui = griddata((x, y), u, (xi, yi), method='cubic')
 vi = griddata((x, y), v, (xi, yi), method='cubic')
 pi = griddata((x, y), p, (xi, yi), method='cubic')
 
-print("Plotting data")
+xq = np.linspace(min(x), max(x), 15)
+yq = np.linspace(min(y), max(y), 15)
+xq, yq = np.meshgrid(xq, yq)
+
+uq = griddata((x, y), u, (xq, yq), method='cubic')
+vq = griddata((x, y), v, (xq, yq), method='cubic')
+
+print("Plotting data...")
 # # Step 3: Plot the contour
 fig,ax=plt.subplots()
 c1=plt.contourf(xi, yi, pi, levels=15, cmap=plt.cm.jet)
 cb1 = fig.colorbar(c1)
 cb1.set_label('Pressure')
-c2=plt.quiver(x, y, u, v, angles='xy', scale_units='xy', scale=5)
+c2=plt.quiver(xq, yq, uq, vq, angles='xy', scale_units='xy', scale=5)
 cb2 = fig.colorbar(c2)  # Show color scale
 cb2.set_label('Velocity magnitude')
 plt.xlabel('X')
 plt.ylabel('Y')
 plt.title('Contour plot')
 
-print("Plotting quadtree")
+print("Plotting quadtree...")
 with open("quadtree.json", 'r') as f:
     quadtree = json.load(f)
 
@@ -95,7 +102,7 @@ with open("quadtree.json", 'r') as f:
 # ax2 = plt.axes(projection ='3d')
  
 # # Creating plot
-# ax2.plot_surface(xi, yi, zi)
+# ax2.plot_surface(xi, yi, pi)
 # ax2.set_xlabel('x')
 
 
