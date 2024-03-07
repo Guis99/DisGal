@@ -367,7 +367,7 @@ SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
                 }
                 // jump matrix setup
                 DD topJump;
-                DD bottomJump = -normals[oppdir] * B(neighborLocals, localNodes[oppdir]);
+                DD bottomJump = normals[oppdir] * B(neighborLocals, localNodes[oppdir]);
 
                 DD topAvg;
                 DD bottomAvg =  B(localNodes[oppdir], neighborLocals);
@@ -997,11 +997,11 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     SpD SMatrixT = (SpD)(SMatrix.transpose()); 
     SpD dgPoissonMat = KMatrix + PMatrix - SMatrix - SMatrixT;
 
-    // SpD combinedQUMatrixX = -PVMatrixX + PJMatrixX; // continuity
-    // SpD combinedQUMatrixY = -PVMatrixY + PJMatrixY;
+    // SpD mat1 = -PVMatrixX + PAMatrixX; // pressure gradient
+    // SpD mat2 = -PVMatrixY + PAMatrixY;
 
-    // SpD combinedPVMatrixX = -PVMatrixX + PAMatrixX; // pressure gradient
-    // SpD combinedPVMatrixY = -PVMatrixY + PAMatrixY;
+    // SpD mat1T = PVMatrixX - PJMatrixX; // continuity
+    // SpD mat2T = PVMatrixY - PJMatrixY;
 
     // SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, dgPoissonMat, 
     //                         combinedPVMatrixX, combinedPVMatrixY,
@@ -1010,8 +1010,14 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     SpD PJMatrixXT = PressureFluxMatrix(inputMesh, 1);
     SpD PJMatrixYT = PressureFluxMatrix(inputMesh, 2);
 
-    SpD mat1 = -PVMatrixX + PJMatrixXT; // pressure gradient
-    SpD mat2 = -PVMatrixY + PJMatrixYT;
+    SpD mat1 = -PVMatrixX + PAMatrixX; // pressure gradient
+    SpD mat2 = -PVMatrixY + PAMatrixY;
+
+    // SpD mat1T = (SpD)(-PVMatrixX.transpose());
+    // SpD mat2T = (SpD)(-PVMatrixY.transpose());
+
+    SpD mat1Int = -PVMatrixX + PJMatrixXT; // pressure gradient
+    SpD mat2Int = -PVMatrixY + PJMatrixYT;
 
     SpD mat1T = (SpD)(mat1.transpose()); // continuity
     SpD mat2T = (SpD)(mat2.transpose());
@@ -1076,6 +1082,7 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<"Solving system with "<<3*freeNodes.size()<<" degrees of freedom... ";
     DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
     std::cout<<"System solved!"<<std::endl;
+    std::cout<<"multiplier: "<<x(3*nNodes)<<std::endl;
     return x;
 }
 

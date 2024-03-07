@@ -7,10 +7,10 @@ import matplotlib.patches as patches
 import subprocess
 
 # discretization parameters
-deg = 1
-div = 16
-Lx = 1
-Ly = 1
+deg = 2
+div = 8
+Lx = 2
+Ly = 2
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
 
 # SIPG penalty param
@@ -70,8 +70,8 @@ ui = griddata((x, y), u, (xi, yi), method='cubic')
 vi = griddata((x, y), v, (xi, yi), method='cubic')
 pi = griddata((x, y), p, (xi, yi), method='cubic')
 
-xq = np.linspace(min(x), max(x), 15)
-yq = np.linspace(min(y), max(y), 15)
+xq = np.linspace(min(x), max(x), 20)
+yq = np.linspace(min(y), max(y), 20)
 xq, yq = np.meshgrid(xq, yq)
 
 uq = griddata((x, y), u, (xq, yq), method='cubic')

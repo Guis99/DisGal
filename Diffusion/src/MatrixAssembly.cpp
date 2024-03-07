@@ -308,7 +308,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     AhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // Generate derivatives for each basis function, copy to full array
-    for (int k=0; k<mesh.halfGaussPoints.size(); k++) { 
+    for (int k=0; k<numNodes; k++) { 
         std::vector<double> xPartials = Utils::numDeriv(.00001, k, mesh.halfGaussPoints, gaussPoints);
         AhInitializer.insert(AhInitializer.end(), xPartials.begin(), xPartials.end());
     }
@@ -326,7 +326,6 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
     splitCellGradXPlaceholder << Eigen::kroneckerProduct(BhT, bottomGrads); splitCellGradsX[1] = splitCellGradXPlaceholder;
     splitCellGradXPlaceholder << Eigen::kroneckerProduct(topRowVec, Ah); splitCellGradsX[2] = splitCellGradXPlaceholder;
     splitCellGradXPlaceholder << Eigen::kroneckerProduct(BhT, topGrads); splitCellGradsX[3] = splitCellGradXPlaceholder;
-
     std::array<DD,4> splitCellGradsY;
     DD splitCellGradYPlaceholder(mesh.halfGaussPoints.size(), numElemNodes); 
     splitCellGradYPlaceholder << Eigen::kroneckerProduct(bottomGrads, BhT); splitCellGradsY[0] = splitCellGradYPlaceholder;
