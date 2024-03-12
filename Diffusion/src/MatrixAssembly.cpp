@@ -182,20 +182,29 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
             // std::cout<<"neighbor in direction "<<dir<<std::endl;
             QTM::Direction oppdir = oppdirs[dir];
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors.size() == 0) {
-                continue;
-            }
+            // if (neighbors.size() == 0) {
+            //     // neighborNodes = {};
+            //     // neighborLocals = {};
+            //     continue;
+            // }
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
-                auto jac = std::min(elm->width, neighbor->width);
+                double jac;
+                if (!neighbor) {
+                    neighborNodes = {};
+                    neighborLocals = {};
+                    jac = elm->width;
+                }
+                
                 // calculate penalty param
-                a = alpha/jac/2;
-                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                else if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                    jac = std::min(elm->width, neighbor->width);
                     neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
                     neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
                 } else { 
                     continue;
                 }
+                a = alpha/jac/2;
                 // calculate jump matrix
                 DD topJump;
                 DD bottomJump = -B(neighborLocals, localNodes[oppdir]);
@@ -371,14 +380,18 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
         // get neighbors
         for (auto dir : directions) {
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors.size() == 0) {
-                continue;
-            }
             QTM::Direction oppdir = oppdirs[dir];
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
-                auto jac = std::min(elm->width, neighbor->width);
-                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                double jac;
+                if (!neighbor) {
+                    neighborNodes = {};
+                    neighborLocals = {};
+                    jac = elm->width;
+                }
+
+                else if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                    jac = std::min(elm->width, neighbor->width);
                     neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
                     neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
                 } else { 
@@ -638,6 +651,34 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     SpD columnSpace(nNodes, freeNodes.size());
     std::cout<<"Assembling null-orth matrix"<<std::endl;
     GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodes, nullSpace, columnSpace);
+
+    SpD columnSpaceT = (SpD)(columnSpace.transpose());
+    SpD nullSpaceT = (SpD)(nullSpace.transpose());
+
+    SpD B11 = columnSpaceT * PMatrix * columnSpace;
+    // Eliminate boundary rows and free columns
+    SpD B12 = columnSpaceT * PMatrix * nullSpace;
+
+
+    SpD A11 = columnSpaceT * SMatrix * columnSpace;
+    // Eliminate boundary rows and free columns
+    SpD A12 = columnSpaceT * SMatrix * nullSpace;
+
+    std::cout<<"dropped nodes: \n";
+    for (int i : allBoundaryNodes) {
+        std::cout<<i<<std::endl;
+    }
+
+    std::cout<<"pre-reduce (flux): \n"<<SMatrix<<std::endl;
+    std::cout<<"after reduce (flux): \n"<<A11<<std::endl;
+    std::cout<<"right side (flux): \n"<<A12<<std::endl;
+
+    std::cout<<"--------------------"<<std::endl;
+
+    std::cout<<"pre-reduce (penalty): \n"<<PMatrix<<std::endl;
+    std::cout<<"after reduce (penalty): \n"<<B11<<std::endl;
+    std::cout<<"right side (penalty): \n"<<B12<<std::endl;
+
     std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
     DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
     std::cout<<"System solved!"<<std::endl;
