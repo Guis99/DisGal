@@ -6,11 +6,11 @@ import matplotlib.patches as patches
 
 import subprocess
 
-div = 1
+div = 3
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
 zero = "10"
 
-exeSelect = 1
+exeSelect = 2
 toRun = ".\main.exe" if exeSelect == 1 else ".\mainSplit.exe"
 
 div2 = 4
@@ -47,7 +47,7 @@ xi, yi = np.meshgrid(xi, yi)
 zi = griddata((x, y), z, (xi, yi), method='cubic')
 
 print("Plotting data")
-# # Step 3: Plot the contour
+# Step 3: Plot the contour
 fig,ax=plt.subplots()
 plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
 plt.colorbar()  # Show color scale

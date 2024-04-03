@@ -7,8 +7,8 @@ import matplotlib.patches as patches
 import subprocess
 
 # discretization parameters
-deg = 2
-div = 8
+deg = 8
+div = 2
 Lx = 2
 Ly = 2
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings

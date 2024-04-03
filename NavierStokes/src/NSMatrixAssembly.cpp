@@ -77,6 +77,7 @@ SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
 
 SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // pressure jump, velocity flux average, U-Q
+    // <u dot n> [q] 
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
@@ -177,25 +178,31 @@ SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::E),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
+    double fac;
     for (auto &elm : leaves) {
         elemNodes = mesh.GetGlobalElemNodes(elm->CID);
         elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
         // get neighbors
         for (auto dir : directions) {
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors.size() == 0) {
-                continue;
-            }
             QTM::Direction oppdir = oppdirs[dir];
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
-                auto jac = std::min(elm->width, neighbor->width);
-                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                if (!neighbor) {
+                    // continue;
+                    neighborNodes = {};
+                    neighborLocals = {};
+                    neighbor = elm;
+                    fac = 1;
+                }
+                else if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
                     neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
                     neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                    fac = .5;
                 } else { 
                     continue;
                 }
+                auto jac = std::min(elm->width, neighbor->width);
                 // jump matrix setup
                 DD topJump;
                 DD bottomJump = -B(neighborLocals, localNodes[oppdir]);
@@ -224,7 +231,7 @@ SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(.5 * jac * jumpMatrix *  quadWeights1D * fluxMatrix);
+                DD localElemMat = (DD)(fac * jac * jumpMatrix *  quadWeights1D * fluxMatrix);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -246,6 +253,7 @@ SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
 
 SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // pressure average, velocity flux jump, V-P
+    // [v dot n] <p>
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
@@ -346,25 +354,31 @@ SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::E),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
+    double fac;
     for (auto &elm : leaves) {
         elemNodes = mesh.GetGlobalElemNodes(elm->CID);
         elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
         // get neighbors
         for (auto dir : directions) {
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors.size() == 0) {
-                continue;
-            }
             QTM::Direction oppdir = oppdirs[dir];
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
-                auto jac = std::min(elm->width, neighbor->width);
-                if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                if (!neighbor) {
+                    neighbor = elm;
+                    neighborNodes = {};
+                    neighborLocals = {};
+                    fac = 1;
+                    // continue;
+                }
+                else if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
                     neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
                     neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                    fac = .5;
                 } else { 
                     continue;
                 }
+                auto jac = std::min(elm->width, neighbor->width);
                 // jump matrix setup
                 DD topJump;
                 DD bottomJump = normals[oppdir] * B(neighborLocals, localNodes[oppdir]);
@@ -393,7 +407,7 @@ SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(.5 * jac * jumpMatrix * quadWeights1D * fluxMatrix);
+                DD localElemMat = (DD)(fac * jac * jumpMatrix * quadWeights1D * fluxMatrix);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -504,7 +518,7 @@ SpD PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu) {
             // std::cout<<"neighbor in direction "<<dir<<std::endl;
             QTM::Direction oppdir = oppdirs[dir];
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors.size() == 0) {
+            if (!neighbors[0]) {
                 continue;
             }
             for (int NI = 0; NI < neighbors.size(); NI++) { 
@@ -664,7 +678,7 @@ SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
         // get neighbors
         for (auto dir : directions) {
             neighbors = mesh.GetCellNeighbors(dir, elm->CID);
-            if (neighbors.size() == 0) {
+            if (!neighbors[0]) {
                 continue;
             }
             QTM::Direction oppdir = oppdirs[dir];
@@ -725,17 +739,17 @@ SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     return mat;
 }
 
-SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&& P) {
+// SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&& P) {
 
-}
+// }
 
-SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state) {
+// SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state) {
 
-}
+// }
 
-SpD GeneralizedNeumannBC(QTM::QuadTreeMesh& mesh, double mu) {
-    // Implements boundary condition of form mu * n dot grad(u) - p*n = 0
-}
+// SpD GeneralizedNeumannBC(QTM::QuadTreeMesh& mesh, double mu) {
+//     // Implements boundary condition of form mu * n dot grad(u) - p*n = 0
+// }
 
 SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
                             SpD& dgPoissonMat,
@@ -787,11 +801,11 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
         }
     }
 
-    for (int k = 0; k < PressurePenalty.outerSize(); ++k) {
-        for (SpD::InnerIterator it(PressurePenalty, k); it; ++it) {
-            tripletList.emplace_back(it.row()+offset2, it.col()+offset2, it.value());
-        }
-    }
+    // for (int k = 0; k < PressurePenalty.outerSize(); ++k) {
+    //     for (SpD::InnerIterator it(PressurePenalty, k); it; ++it) {
+    //         tripletList.emplace_back(it.row()+offset2, it.col()+offset2, it.value());
+    //     }
+    // }
 
     // add zero mean pressure constraint 
     int currDofIndx = offset2;
@@ -966,7 +980,17 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 std::vector<bool> natBC) {
     std::vector<int> freeNodes = inputMesh.freeNodes;
     int nNodes = inputMesh.nNodes();
-    int offset1 = nNodes;
+    int offset1 = 2*nNodes;
+
+    for (auto i : velEss) {
+        std::cout<<i<<std::endl;
+    }
+
+    std::cout<<"-------------"<<std::endl;
+
+    for (auto i : pressEss) {
+        std::cout<<i<<std::endl;
+    }
 
     std::cout<<"Assembling stiffness matrix...";
     SpD KMatrix = StiffnessMatrix(inputMesh, mu); 
@@ -1013,11 +1037,17 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     SpD mat1 = -PVMatrixX + PAMatrixX; // pressure gradient
     SpD mat2 = -PVMatrixY + PAMatrixY;
 
-    // SpD mat1T = (SpD)(-PVMatrixX.transpose());
-    // SpD mat2T = (SpD)(-PVMatrixY.transpose());
+    // SpD mat1 = -PVMatrixX + PJMatrixXT; // pressure gradient
+    // SpD mat2 = -PVMatrixY + PJMatrixYT;
 
-    SpD mat1Int = -PVMatrixX + PJMatrixXT; // pressure gradient
-    SpD mat2Int = -PVMatrixY + PJMatrixYT;
+    // SpD mat1T = PVMatrixX - PJMatrixX; // continuity
+    // SpD mat2T = PVMatrixY - PJMatrixY;
+
+    // SpD mat1T = (SpD)(PVMatrixX.transpose());
+    // SpD mat2T = (SpD)(PVMatrixY.transpose());
+
+    // SpD mat1Int = -PVMatrixX + PJMatrixXT; // pressure gradient
+    // SpD mat2Int = -PVMatrixY + PJMatrixYT;
 
     SpD mat1T = (SpD)(mat1.transpose()); // continuity
     SpD mat2T = (SpD)(mat2.transpose());
@@ -1063,6 +1093,7 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     dirichletBoundaryVals << UDirichlet, 
                             VDirichlet, 
                             PDirichlet;
+
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling null-orth matrix...";
@@ -1079,7 +1110,7 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodesAll, nullSpace, columnSpace);
     std::cout<<" finished!"<<std::endl;
 
-    std::cout<<"Solving system with "<<3*freeNodes.size()<<" degrees of freedom... ";
+    std::cout<<"Solving system with "<<freeNodesAll.size()<<" degrees of freedom... ";
     DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
     std::cout<<"System solved!"<<std::endl;
     std::cout<<"multiplier: "<<x(3*nNodes)<<std::endl;

@@ -191,9 +191,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
                 auto neighbor = neighbors[NI];
                 double jac;
                 if (!neighbor) {
-                    neighborNodes = {};
-                    neighborLocals = {};
-                    jac = elm->width;
+                    continue;
                 }
                 
                 // calculate penalty param
@@ -384,16 +382,16 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
                 double jac;
+                double fac;
                 if (!neighbor) {
-                    neighborNodes = {};
-                    neighborLocals = {};
-                    jac = elm->width;
+                    continue;
                 }
 
                 else if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
                     jac = std::min(elm->width, neighbor->width);
                     neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
                     neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                    fac = .5;
                 } else { 
                     continue;
                 }
@@ -434,8 +432,8 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(.5 * jac * jumpMatrix * quadWeights1D * fluxMatrixX + 
-                                    .5 * jac * jumpMatrix * quadWeights1D * fluxMatrixY);
+                DD localElemMat = (DD)(fac * jac * jumpMatrix * quadWeights1D * fluxMatrixX + 
+                                    fac * jac * jumpMatrix * quadWeights1D * fluxMatrixY);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -594,6 +592,23 @@ void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
     columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
 }
 
+void FindRank(SpD& mat) {
+    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> qr;
+    qr.compute(mat);
+
+    // Count the number of non-zero (or significant) diagonal elements in R
+    int rank = 0;
+    double tol = 1e-10; // Tolerance for considering an element as non-zero
+    for(int i = 0; i < qr.matrixR().rows(); ++i) {
+        if (std::abs(qr.matrixR().coeff(i, i)) > tol) {
+            rank++;
+        }
+    }
+
+    std::cout << "Rank: " << rank << std::endl;
+    std::cout<<"Size: "<<mat.rows()<<std::endl;
+}
+
 DvD ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& columnSpace, SpD& nullSpace, DvD& boundaryVals) {
     // Eliminate rows and columns corr. to boundary nodes
     SpD columnSpaceT = (SpD)(columnSpace.transpose());
@@ -608,9 +623,15 @@ DvD ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& column
 
     using namespace Eigen;
 
-    Eigen::ConjugateGradient<SpD, Lower|Upper> cg;
-    cg.compute(A11);
-    DvD x = cg.solve(F11 - A12 * boundaryVals);
+    SparseLU<SpD,COLAMDOrdering<int>> solver;
+    solver.analyzePattern(A11);
+    FindRank(A11);
+    solver.factorize(A11);
+    DvD x = solver.solve(F11 - A12 * boundaryVals); 
+
+    // ConjugateGradient<SpD, Lower|Upper> cg;
+    // cg.compute(A11);
+    // DvD x = cg.solve(F11 - A12 * boundaryVals);
 
     x = columnSpace * x + nullSpace * boundaryVals;
     return x;
@@ -655,29 +676,95 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     SpD columnSpaceT = (SpD)(columnSpace.transpose());
     SpD nullSpaceT = (SpD)(nullSpace.transpose());
 
-    SpD B11 = columnSpaceT * PMatrix * columnSpace;
-    // Eliminate boundary rows and free columns
-    SpD B12 = columnSpaceT * PMatrix * nullSpace;
+    // SpD B11 = columnSpaceT * PMatrix * columnSpace;
+    // // Eliminate boundary rows and free columns
+    // SpD B12 = columnSpaceT * PMatrix * nullSpace;
 
 
-    SpD A11 = columnSpaceT * SMatrix * columnSpace;
-    // Eliminate boundary rows and free columns
-    SpD A12 = columnSpaceT * SMatrix * nullSpace;
+    // SpD A11 = columnSpaceT * SMatrix * columnSpace;
+    // // Eliminate boundary rows and free columns
+    // SpD A12 = columnSpaceT * SMatrix * nullSpace;
 
-    std::cout<<"dropped nodes: \n";
-    for (int i : allBoundaryNodes) {
-        std::cout<<i<<std::endl;
+    // SpD C11 = columnSpaceT * SMatrixT * columnSpace;
+    // // Eliminate boundary rows and free columns
+    // SpD C12 = columnSpaceT * SMatrixT * nullSpace;
+
+    // std::cout<<"dropped nodes: \n";
+    // for (int i : allBoundaryNodes) {
+    //     std::cout<<i<<std::endl;
+    // }
+
+    // std::cout<<"pre-reduce (flux): \n"<<SMatrix<<std::endl;
+    // std::cout<<"after reduce (flux): \n"<<A11<<std::endl;
+    // std::cout<<"right side (flux): \n"<<A12<<std::endl;
+
+    // std::cout<<"--------------------"<<std::endl;
+
+    // std::cout<<"pre-reduce (flux.T): \n"<<SMatrixT<<std::endl;
+    // std::cout<<"after reduce (flux.T): \n"<<C11<<std::endl;
+    // std::cout<<"right side (flux.T): \n"<<C12<<std::endl;
+
+    // std::cout<<"--------------------"<<std::endl;
+
+    // std::cout<<"pre-reduce (penalty): \n"<<PMatrix<<std::endl;
+    // std::cout<<"after reduce (penalty): \n"<<B11<<std::endl;
+    // std::cout<<"right side (penalty): \n"<<B12<<std::endl;
+
+    std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
+    DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
+    std::cout<<"System solved!"<<std::endl;
+    return x;
+}
+
+DvD IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
+                        std::vector<std::shared_ptr<QTM::Cell>>& dirichletCells,
+                        DvD& dirichletVals,
+                        std::vector<std::vector<int>>& dirichletNodes) {
+    // do integral v * u_D over dirichlet boundary
+    DvD out;
+} 
+
+DD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
+                double k,
+                std::string source,
+                std::vector<bool> ess,
+                std::vector<bool> nat,
+                std::vector<std::string> dbcs,
+                std::vector<std::string> nbcs,
+                double penaltyParam,
+                double dirichletPenalty) {
+    
+    auto boundaryNodes = inputMesh.boundaryNodes;
+    std::vector<int> freeNodes = inputMesh.freeNodes;
+    int nNodes = inputMesh.nNodes();
+
+    std::vector<int> allBoundaryNodes;
+    for (auto bNodes : boundaryNodes) {
+        allBoundaryNodes.insert(allBoundaryNodes.end(), bNodes.begin(), bNodes.end());
     }
 
-    std::cout<<"pre-reduce (flux): \n"<<SMatrix<<std::endl;
-    std::cout<<"after reduce (flux): \n"<<A11<<std::endl;
-    std::cout<<"right side (flux): \n"<<A12<<std::endl;
+    std::cout<<"Assembling stiffness matrix"<<std::endl;
+    SpD KMatrix = StiffnessMatrix(inputMesh, k);
+    std::cout<<"Assembling penalty matrix"<<std::endl;
+    SpD PMatrix = PenaltyMatrix(inputMesh, k, penaltyParam);
+    std::cout<<"Assembling flux matrix"<<std::endl;
+    SpD SMatrix = FluxMatrix(inputMesh, k);
+    SpD SMatrixT = (SpD)(SMatrix.transpose());
+    std::cout<<"Assembling overall system matrix"<<std::endl;
+    SpD StiffnessMatrix = KMatrix - SMatrix - SMatrixT + PMatrix;
 
-    std::cout<<"--------------------"<<std::endl;
+    std::cout<<"Assembling RHS vector"<<std::endl;
+    DvD FMatrix = AssembleFVec(inputMesh, 1.0, source);
+    std::cout<<"Assembling boundary condition vector"<<std::endl;
+    DvD boundaryVals = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, dbcs);
 
-    std::cout<<"pre-reduce (penalty): \n"<<PMatrix<<std::endl;
-    std::cout<<"after reduce (penalty): \n"<<B11<<std::endl;
-    std::cout<<"right side (penalty): \n"<<B12<<std::endl;
+    SpD nullSpace(nNodes, allBoundaryNodes.size());
+    SpD columnSpace(nNodes, freeNodes.size());
+    std::cout<<"Assembling null-orth matrix"<<std::endl;
+    GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodes, nullSpace, columnSpace);
+
+    SpD columnSpaceT = (SpD)(columnSpace.transpose());
+    SpD nullSpaceT = (SpD)(nullSpace.transpose());
 
     std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
     DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
