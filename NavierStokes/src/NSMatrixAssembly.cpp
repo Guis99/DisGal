@@ -864,7 +864,7 @@ DvD AssembleStokesSource(QTM::QuadTreeMesh& mesh,
     return out;
 }
 
-DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
+DvD EvalPartialSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
                                     std::vector<std::vector<int>>& boundaryNodes, 
                                     std::vector<std::string>& strs, 
                                     std::vector<int>& allBoundaryNodes, 
@@ -1086,9 +1086,9 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
             }
         }
     }
-    DvD UDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Ubcs, allBoundaryNodes, 0);
-    DvD VDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, VDN, Vbcs, allBoundaryNodes, 1);
-    DvD PDirichlet = EvalPartialDirichletBoundaryCond(inputMesh, PDN, Pbcs, allBoundaryNodes, 2);
+    DvD UDirichlet = EvalPartialSymbolicBoundaryCond(inputMesh, VDN, Ubcs, allBoundaryNodes, 0);
+    DvD VDirichlet = EvalPartialSymbolicBoundaryCond(inputMesh, VDN, Vbcs, allBoundaryNodes, 1);
+    DvD PDirichlet = EvalPartialSymbolicBoundaryCond(inputMesh, PDN, Pbcs, allBoundaryNodes, 2);
     DvD dirichletBoundaryVals(2*UDirichlet.rows() + PDirichlet.rows());
     dirichletBoundaryVals << UDirichlet, 
                             VDirichlet, 

@@ -21,7 +21,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k);
 DvD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr);;
 std::vector<double> ComputeResiduals(QTM::QuadTreeMesh&, DvD& solution, SpD& source);
 std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, double residualLimit);
-DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs);
+DvD EvalSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs);
 void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
                                         std::vector<int>& boundaryNodes, 
                                         std::vector<int>& freeNodes,

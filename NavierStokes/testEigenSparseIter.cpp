@@ -116,5 +116,7 @@ int main() {
     std::cout<<"Testing matrix compose"<<std::endl;
     std::cout<<bigMat1<<"-----------------\n"<<bigMat2<<"-----------------\n"<<bigMat1-bigMat2<<std::endl;
 
+    
+
     return 0;
 }

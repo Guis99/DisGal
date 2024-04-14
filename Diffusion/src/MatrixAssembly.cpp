@@ -190,7 +190,7 @@ SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha) {
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
                 double jac;
-                if (!neighbor) {
+                if (!neighbor) { // skip exterior edges
                     continue;
                 }
                 
@@ -383,7 +383,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
                 auto neighbor = neighbors[NI];
                 double jac;
                 double fac;
-                if (!neighbor) {
+                if (!neighbor) { // skip exterior edges
                     continue;
                 }
 
@@ -532,7 +532,7 @@ std::vector<double> ComputeResiduals(QTM::QuadTreeMesh& mesh, DvD& solution, SpD
 //     return out;
 // }
 
-DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs) {
+DvD EvalSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs) {
     std::vector<std::array<double,2>> boundaryNodePos;
     for (auto bNodes : boundaryNodes) {
         auto nodePos = inputMesh.GetNodePos(bNodes);
@@ -549,7 +549,7 @@ DvD EvalDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vec
     int ptrIncr;
     std::string prompt;
 
-    for (int i=0; i<4; i++) {
+    for (int i=0; i<boundaryNodes.size(); i++) {
         ptrIncr = boundaryNodes[i].size();
         // Take bcFunc and evaluate it
         boundaryCalc = Utils::EvalSymbolicBC(currPointer, ptrIncr, strs[i]);
@@ -666,7 +666,7 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<"Assembling RHS vector"<<std::endl;
     DvD FMatrix = AssembleFVec(inputMesh, 1.0, source);
     std::cout<<"Assembling boundary condition vector"<<std::endl;
-    DvD boundaryVals = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, bcs);
+    DvD boundaryVals = EvalSymbolicBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, bcs);
 
     SpD nullSpace(nNodes, allBoundaryNodes.size());
     SpD columnSpace(nNodes, freeNodes.size());
@@ -718,11 +718,37 @@ DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
 
 DvD IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                         std::vector<std::shared_ptr<QTM::Cell>>& dirichletCells,
-                        DvD& dirichletVals,
+                        std::vector<std::string> dbcs,
                         std::vector<std::vector<int>>& dirichletNodes) {
-    // do integral v * u_D over dirichlet boundary
+    // do integral (v - n dot grad v) * u_D   over dirichlet boundary
+    std::vector<int> allBoundaryNodes;
+    for (auto bNodes : dirichletNodes) {
+        allBoundaryNodes.insert(allBoundaryNodes.end(), bNodes.begin(), bNodes.end());
+    }
+    auto neumannValues = EvalSymbolicBoundaryCond(mesh, dirichletNodes, allBoundaryNodes, dbcs);
+
+    for (const auto& cell : dirichletCells) {
+
+    }
     DvD out;
 } 
+
+DvD IntegrateNeumann(QTM::QuadTreeMesh& mesh,
+                        std::vector<std::shared_ptr<QTM::Cell>>& neumannCells,
+                        std::vector<std::string> nbcs,
+                        std::vector<std::vector<int>>& neumannNodes) {
+    // do integral v * u_N over neumann boundary
+    std::vector<int> allBoundaryNodes;
+    for (auto bNodes : neumannNodes) {
+        allBoundaryNodes.insert(allBoundaryNodes.end(), bNodes.begin(), bNodes.end());
+    }
+    auto neumannValues = EvalSymbolicBoundaryCond(mesh, neumannNodes, allBoundaryNodes, nbcs);
+
+    for (const auto& cell : neumannCells) {
+
+    }
+    DvD out;
+}
 
 DD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double k,
@@ -756,7 +782,7 @@ DD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<"Assembling RHS vector"<<std::endl;
     DvD FMatrix = AssembleFVec(inputMesh, 1.0, source);
     std::cout<<"Assembling boundary condition vector"<<std::endl;
-    DvD boundaryVals = EvalDirichletBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, dbcs);
+    DvD boundaryVals = EvalSymbolicBoundaryCond(inputMesh, boundaryNodes, allBoundaryNodes, dbcs);
 
     SpD nullSpace(nNodes, allBoundaryNodes.size());
     SpD columnSpace(nNodes, freeNodes.size());

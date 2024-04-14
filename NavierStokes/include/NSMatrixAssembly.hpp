@@ -13,7 +13,7 @@ SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&
 SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state);
 
 SpD GeneralizedNeumannBC(QTM::QuadTreeMesh& mesh, double mu);
-DvD EvalPartialDirichletBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
+DvD EvalPartialSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
                                     std::vector<std::vector<int>>& boundaryNodes, 
                                     std::vector<std::string>& strs, 
                                     std::vector<int>& allBoundaryNodes, 
