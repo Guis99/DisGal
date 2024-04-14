@@ -1,4 +1,4 @@
-#include "..\..\Dependencies\QTM\include\QTM.hpp"
+#include "..\..\qtm\include\QTM.hpp"
 #include "..\..\Dependencies\Eigen\Core"
 #include "..\..\Dependencies\Eigen\Sparse"
 #include "..\..\Dependencies\unsupported\Eigen\KroneckerProduct"

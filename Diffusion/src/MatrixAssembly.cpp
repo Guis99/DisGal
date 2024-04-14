@@ -744,7 +744,6 @@ DvD IntegrateNeumann(QTM::QuadTreeMesh& mesh,
     }
     auto neumannValues = EvalSymbolicBoundaryCond(mesh, neumannNodes, allBoundaryNodes, nbcs);
 
-
     for (const auto& cell : neumannCells) {
 
     }
