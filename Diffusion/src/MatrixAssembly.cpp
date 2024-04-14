@@ -637,7 +637,7 @@ DvD ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& column
     return x;
 }
 
-DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
+DvD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double c,
                 double k,
                 std::string source,
@@ -750,11 +750,9 @@ DvD IntegrateNeumann(QTM::QuadTreeMesh& mesh,
     DvD out;
 }
 
-DD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
+DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double k,
                 std::string source,
-                std::vector<bool> ess,
-                std::vector<bool> nat,
                 std::vector<std::string> dbcs,
                 std::vector<std::string> nbcs,
                 double penaltyParam,

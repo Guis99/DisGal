@@ -14,6 +14,8 @@ typedef Eigen::MatrixXd DD;
 // Dynamically-sized vector of doubles
 typedef Eigen::VectorXd DvD;
 
+
+
 DD GenerateQuadWeights(std::vector<double>& gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes);
 SpD StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k);
 SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha);
@@ -28,10 +30,17 @@ void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
                                         SpD& nullSpace,
                                         SpD& columnSpace);
 DvD ComputeSolutionStationaryLinear(SpD& KMatrix, DvD& FMatrix, SpD& columnSpace, SpD& nullSpace, DvD& dirichletBoundaryVals);
-DD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
+DvD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double c,
                 double k,
                 std::string source,
                 std::vector<std::string> bcs,
                 double penaltyParam);
+DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
+                double k,
+                std::string source,
+                std::vector<std::string> dbcs,
+                std::vector<std::string> nbcs,
+                double penaltyParam,
+                double dirichletPenalty);
 #endif
