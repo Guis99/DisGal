@@ -372,6 +372,7 @@ SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k) {
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::E),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
+                                                
     for (auto &elm : leaves) {
         elemNodes = mesh.GetGlobalElemNodes(elm->CID);
         elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
@@ -839,7 +840,36 @@ DvD IntegrateNeumann(QTM::QuadTreeMesh& mesh,
     return out;
 }
 
-void GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
+
+struct quadUtils {
+    // Quadrature weights
+    DD quadWeights1D;
+    DD weightMat;
+
+    // full cell nodal vals
+
+    // full cell nodal grads on boundary points
+    DD combinedXEdge;
+    DD combinedYEdge;
+
+    // full cell nodal grads on all points
+    DD combinedX;
+    DD combinedY;
+
+    // split cell nodal vals
+    std::array<DD,4> splitCellVals;
+
+    // split cell nodal grads
+    std::array<DD,4> splitCellGradsX;
+    std::array<DD,4> splitCellGradsY;
+
+    // neighbor-finding
+    std::vector<QTM::Direction> directions;        
+    std::vector<QTM::Direction> oppdirs;
+    std::vector<std::vector<int>> localNodes;
+};
+
+quadUtils GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
@@ -853,6 +883,8 @@ void GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
     // Convert 1D quad weights to diag matrix
     Eigen::Map<DvD> integXMat(integX.data(),numNodes);
     DD quadWeights1D = (DD)integXMat.asDiagonal();
+
+    DD weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, numNodes, numNodes, numElemNodes);
 
     // basis func to node mapping
     DD B; B.setIdentity(numElemNodes, numElemNodes);
@@ -872,9 +904,14 @@ void GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
     Eigen::Map<DD> A(AInitializer.data(), numNodes, numNodes); 
     // Get element-wise matrix intermediates
     DD combinedX(numElemNodes, numElemNodes);
-    combinedX << Eigen::kroneckerProduct(Bs, A);
+    combinedX << Eigen::kroneckerProduct(B, A);
     DD combinedY(numElemNodes, numElemNodes);
-    combinedY << Eigen::kroneckerProduct(A, Bs);
+    combinedY << Eigen::kroneckerProduct(A, B);
+
+    DD combinedXEdge(numElemNodes, numElemNodes);
+    combinedXEdge << Eigen::kroneckerProduct(Bs, A);
+    DD combinedYEdge(numElemNodes, numElemNodes);
+    combinedYEdge << Eigen::kroneckerProduct(A, Bs);
 
     // get basis func vals for split cell quad
     std::vector<double> BhInitializer; 
@@ -950,6 +987,41 @@ void GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
 
     double normalX[4] = {0,1,0,-1};
     double normalY[4] = {1,0,-1,0};
+
+    std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
+                                                QTM::Direction::S, QTM::Direction::W};
+
+                                                
+    std::vector<QTM::Direction> oppdirs = {QTM::Direction::S, QTM::Direction::W, 
+                                            QTM::Direction::N, QTM::Direction::E};
+
+    std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::E),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::S),
+                                                mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
+
+    // populate package with arrays
+    quadUtils package;
+
+    package.weightMat = weightMat;
+    package.quadWeights1D = quadWeights1D;
+
+    package.combinedXEdge = combinedXEdge;
+    package.combinedYEdge = combinedYEdge;
+
+    package.combinedX = combinedX;
+    package.combinedY = combinedY;
+
+    package.splitCellVals = splitCellVals;
+
+    package.splitCellGradsX = splitCellGradsX;
+    package.splitCellGradsY = splitCellGradsY;
+
+    package.directions = directions;        
+    package.oppdirs = oppdirs;
+    package.localNodes = localNodes;
+
+    return package;
 }
 
 DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,

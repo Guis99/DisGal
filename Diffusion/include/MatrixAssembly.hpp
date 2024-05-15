@@ -43,4 +43,33 @@ DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 std::vector<std::string> nbcs,
                 double penaltyParam,
                 double dirichletPenalty);
+
+struct quadUtils {
+    // Quadrature weights
+    DD quadWeights1D;
+    DD weightMat;
+
+    // full cell nodal vals
+
+    // full cell nodal grads on boundary points
+    DD combinedXEdge;
+    DD combinedYEdge;
+
+    // full cell nodal grads on all points
+    DD combinedX;
+    DD combinedY;
+
+    // split cell nodal vals
+    std::array<DD,4> splitCellVals;
+
+    // split cell nodal grads
+    std::array<DD,4> splitCellGradsX;
+    std::array<DD,4> splitCellGradsY;
+
+    // neighbor-finding
+    std::vector<QTM::Direction> directions;        
+    std::vector<QTM::Direction> oppdirs;
+    std::vector<std::vector<int>> localNodes;
+};
+
 #endif
