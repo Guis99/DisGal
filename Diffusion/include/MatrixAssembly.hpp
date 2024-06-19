@@ -50,6 +50,7 @@ struct quadUtils {
     DD weightMat;
 
     // full cell nodal vals
+    DD nodalVals;
 
     // full cell nodal grads on boundary points
     DD combinedXEdge;
