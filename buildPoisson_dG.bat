@@ -1,1 +1,1 @@
-g++ .\Diffusion\mainTestPoissondG.cpp .\Diffusion\src\MatrixAssembly.cpp .\Dependencies\QTM\src\QTM.cpp .\Dependencies\QTM\src\Cell.cpp .\Dependencies\Utils\Utils.cpp -o main1.exe -O3
+g++ .\Diffusion\mainTestPoissondG.cpp .\Diffusion\src\MatrixAssemblydG.cpp .\QTM\src\QTM.cpp .\QTM\src\Cell.cpp .\Dependencies\Utils\Utils.cpp -o Diffusion/main1.exe -O3

@@ -14,35 +14,7 @@ typedef Eigen::MatrixXd DD;
 // Dynamically-sized vector of doubles
 typedef Eigen::VectorXd DvD;
 
-
-
-DD GenerateQuadWeights(std::vector<double>& gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes);
-SpD StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k);
-SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha);
-SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k);
-DvD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr);;
-std::vector<double> ComputeResiduals(QTM::QuadTreeMesh&, DvD& solution, SpD& source);
-std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, double residualLimit);
-DvD EvalSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs);
-void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
-                                        std::vector<int>& boundaryNodes, 
-                                        std::vector<int>& freeNodes,
-                                        SpD& nullSpace,
-                                        SpD& columnSpace);
-DvD ComputeSolutionStationaryLinear(SpD& KMatrix, DvD& FMatrix, SpD& columnSpace, SpD& nullSpace, DvD& dirichletBoundaryVals);
-DvD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
-                double c,
-                double k,
-                std::string source,
-                std::vector<std::string> bcs,
-                double penaltyParam);
-DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
-                double k,
-                std::string source,
-                std::vector<std::string> dbcs,
-                std::vector<std::string> nbcs,
-                double penaltyParam,
-                double dirichletPenalty);
+namespace PMA { // PMA = Poisson Matrix Assembly
 
 struct quadUtils {
     // Quadrature weights
@@ -51,10 +23,6 @@ struct quadUtils {
 
     // full cell nodal vals
     DD nodalVals;
-
-    // full cell nodal grads on boundary points
-    DD combinedXEdge;
-    DD combinedYEdge;
 
     // full cell nodal grads on all points
     DD combinedX;
@@ -73,4 +41,58 @@ struct quadUtils {
     std::vector<std::vector<int>> localNodes;
 };
 
+quadUtils GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh);
+
+DD GenerateQuadWeights(std::vector<double>& gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes);
+
+SpD StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k);
+SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, quadUtils& package);
+SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k, quadUtils& package);
+SpD BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k, 
+                std::vector<bool> isDirichletBC,
+                std::vector<std::string> dbcs,
+                double alpha, 
+                quadUtils& package);
+
+DvD IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
+                        std::vector<bool> isDirichletBC,
+                        std::vector<std::string> dbcs,
+                        double alpha, 
+                        quadUtils& package);
+
+DvD IntegrateNeumann(QTM::QuadTreeMesh& mesh,
+                        std::vector<bool> isNeumannBC,
+                        std::vector<std::string> nbcs,
+                        quadUtils& package);                        
+
+DvD AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr);;
+std::vector<double> ComputeResiduals(QTM::QuadTreeMesh&, DvD& solution, SpD& source);
+std::vector<std::shared_ptr<QTM::Cell>> TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, double residualLimit);
+DvD EvalSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs);
+void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
+                                        std::vector<int>& boundaryNodes, 
+                                        std::vector<int>& freeNodes,
+                                        SpD& nullSpace,
+                                        SpD& columnSpace);
+
+DvD ComputeSolutionStationaryLinear(SpD& KMatrix, DvD& FMatrix, SpD& columnSpace, SpD& nullSpace, DvD& dirichletBoundaryVals);
+DvD ComputeSolutionStationaryLinearNoElim(SpD& A, DvD& b);
+void FindRank(SpD& mat);
+
+DvD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
+                double c,
+                double k,
+                std::string source,
+                std::vector<std::string> bcs,
+                double penaltyParam);
+DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
+                double k,
+                std::string source,
+                std::vector<bool> isDirichletBC,
+                std::vector<bool> isNeumannBC,
+                std::vector<std::string> dbcs,
+                std::vector<std::string> nbcs,
+                double penaltyParam,
+                double dirichletPenalty);
+}
 #endif

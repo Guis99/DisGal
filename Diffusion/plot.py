@@ -6,15 +6,17 @@ import matplotlib.patches as patches
 
 import subprocess
 
-div = 3
+div = 10
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
 zero = "10"
 
-exeSelect = 2
+bcs = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
+
+exeSelect = 1
 toRun = ".\main.exe" if exeSelect == 1 else ".\mainSplit.exe"
 
 div2 = 4
-subprocess.run([toRun, "4", str(div), str(div), "1", "1", "100*x*y", "sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)", "90"]) 
+subprocess.run([toRun, "1", str(div), str(div), "1", "1", force, *bcs, "90"]) 
 # subprocess.run([toRun, "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "50"])  
 
 def draw_cell_nr(cell, ax):

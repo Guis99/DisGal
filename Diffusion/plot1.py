@@ -7,13 +7,13 @@ import matplotlib.patches as patches
 import subprocess
 
 # discretization parameters
-deg = 8
-div = 2
-Lx = 4
-Ly = 4
+deg = 1
+div = 10
+Lx = 1
+Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
 
-penalty = 90
+penalty = 20
 
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
 
@@ -26,9 +26,8 @@ dirichletBC = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 neumannBC = []
 
 exeSelect = 2
-toRun = ".\maindG.exe"
+toRun = ".\main1.exe"
 
-div2 = 4
 subprocess.run([toRun, *meshInfo, str(penalty), force, str(numBoundaries), *ess, *nat, *dirichletBC, *neumannBC]) 
 # subprocess.run([toRun, "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "50"])  
 
@@ -46,7 +45,7 @@ def draw_cell_nr(cell, ax):
 
 # Step 1: Load your data
 print("Loading results")
-data = np.loadtxt('output.txt', delimiter=',')
+data = np.loadtxt('outputdG.txt', delimiter=',')
 x = data[:, 0]
 y = data[:, 1]
 z = data[:, 2]
@@ -72,7 +71,7 @@ plt.ylabel('Y')
 plt.title('Contour plot')
 
 print("Plotting quadtree")
-with open("quadtree.json", 'r') as f:
+with open("quadtreedG.json", 'r') as f:
     quadtree = json.load(f)
 
     draw_cell_nr(quadtree, ax)

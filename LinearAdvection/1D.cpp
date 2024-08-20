@@ -157,7 +157,7 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
         double Lx = mesh.elemWidth; // Jacobian factors
         // calculate local matrix
         localElemVecMass = massVec*Lx/2;
-        localElemMatK = -Ax.transpose() * weightMat;
+        localElemMatK = Ax.transpose() * weightMat;
         
         // Get nodes in element
         std::vector<int> dofsInElem = elm.dofs;
@@ -175,11 +175,13 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
         int leftVal = elm.dofs[0];
         int rightVal = (elm.dofs).back(); 
         if (elm.ID == 0) {
-            tripletListK.emplace_back(rightVal, rightVal, 1.0);
-        }
-        else {
-            tripletListK.emplace_back(leftVal, leftVal - 1, -1.0); // left boundary
-            tripletListK.emplace_back(rightVal, rightVal, 1.0); // right boundary
+            tripletListK.emplace_back(rightVal, rightVal, -1.0);
+        } else if (elm.ID == nElements - 1) {
+            tripletListK.emplace_back(leftVal, leftVal - 1, 1.0); // left boundary
+            tripletListK.emplace_back(rightVal, rightVal, -1.0); // right boundary
+        } else {
+            tripletListK.emplace_back(leftVal, leftVal - 1, 1.0); // left boundary
+            tripletListK.emplace_back(rightVal, rightVal, -1.0); // right boundary
         }
     }
 
@@ -223,7 +225,7 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
     // Eliminate boundary rows and columns
     SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
     SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
-    SpD combinedMats = timeStep * K11 / 2 + M11;
+    SpD combinedMats = M11 - timeStep * K11 / 2;
     int system_size = combinedMats.rows();
     SpD dummyId(system_size, system_size); 
     std::vector<Eigen::Triplet<double>> tripletListID;
@@ -254,76 +256,87 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
 
     // Time-stepping
     for (int i=1; i<numTimeSteps; i++) {
-        x = combinedMatsInv * (M11 - timeStep * K11 / 2) * prevState;
+        x = combinedMatsInv * (M11 + timeStep * K11 / 2) * prevState;
         prevState = x;
         out.push_back(columnSpace * x);
     }
     return out;
 }
 
-int main() {
+int main(int argc, char* argv[]) {
     int deg;
     int numElem;
-    double width = 2;
-    std::cout<<std::endl<<"Specify num elems: ";
-    std::cin>>numElem;
-    std::cout<<std::endl<<"Specify shape func degree: ";
-    std::cin>>deg;
-    std::cout<<std::endl;
-    double spacing = width / numElem;
+    double width;
 
-    double timeStep;
+    std::string IC;
+
+    double timeLength;
     int numTimeSteps;
 
-    std::cout<<std::endl<<"Specify number of time-steps: ";
-    std::cin>>numTimeSteps;
-    timeStep = 1.75 / numTimeSteps;
+    std::cout<<"-----------------------------------------\n";
+    std::cout<<"| Initializing 1D linear advection solver |"<<std::endl;
+    std::cout<<"-----------------------------------------\n";
 
-    std::cout<<std::endl<<"Generating mesh"<<std::endl;
+    deg = std::stoi(argv[1]); numElem = std::stoi(argv[2]); width = std::stod(argv[3]);
+    IC = argv[4];
+    timeLength = std::stoi(argv[5]); numTimeSteps = std::stoi(argv[6]);
+    double timeStep = timeLength / numTimeSteps; 
+
+    std::cout<<"Order (polynomial degree): "<<deg<<"\nnx: "<<numElem<<std::endl;
+    std::cout<<"-------------------------"<<std::endl;
+    std::cout<<"Initial condition: "<<IC<<std::endl;
+
+    std::cout<<"Simulating for duration "<<timeLength<<" using "<<numTimeSteps<<" timesteps"<<std::endl;
+    std::cout<<"-------------------------"<<std::endl;
+    
+    double spacing = width / numElem;
+
+    std::cout<<std::endl<<"Generating mesh..."<<std::endl;
+    std::cout<<"-------------------------"<<std::endl;
     BasicMesh1D mesh = CreateMesh(deg, numElem, spacing);
     auto nodes = mesh.nodes;
     int nNodes = nodes.size();
 
-    int stopIdx = 1;
+    int stopIdx = 0;
     std::vector<double> x;
 
     while (nodes[stopIdx].position <= .5) {
         x.push_back(nodes[stopIdx++].position); 
     }
+    
+    std::vector<double> ICVec = Utils::EvalSymbolicBC1D(x.data(), stopIdx, IC);
 
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-    std::vector<double> ICVec = Utils::EvalSymbolicBC(x.data(), stopIdx, "Specify initial condition");
-    ICVec.reserve(nNodes - 1);
+    ICVec.reserve(nNodes);
 
     for (stopIdx; stopIdx<nNodes; stopIdx++) {
         ICVec.push_back(0);
     }
 
-    Eigen::Map<DvD> InitialCondition(ICVec.data(), nNodes - 1, 1);
+    Eigen::Map<DvD> InitialCondition(ICVec.data(), nNodes, 1);
     DvD initialCondition = (DvD)InitialCondition;
 
-    std::vector<int> boundaryNodes = {0};
-    std::vector<int> freeNodes; freeNodes.reserve(nNodes - 1);
+    std::vector<int> boundaryNodes = {};
+    std::vector<int> freeNodes; freeNodes.reserve(nNodes);
 
-    for (int i=1; i<nNodes; i++) {
+    for (int i=0; i<nNodes; i++) {
         freeNodes.push_back(i);
     }
 
     int numDofs = numElem * (deg + 1);
-    std::cout<<"Generating system matrices"<<std::endl;
+    std::cout<<"Generating system matrices..."<<std::endl;
     SpD MassMatrix(numDofs, numDofs); SpD StiffnessMatrix(numDofs, numDofs);
     AssembleSystemMatrices(mesh, MassMatrix, StiffnessMatrix);
 
     SpD nullSpace(nNodes, boundaryNodes.size());
     SpD columnSpace(nNodes, freeNodes.size());
-    std::cout<<"Assembling null-orth matrix"<<std::endl;
+    std::cout<<"Assembling null-orth matrix..."<<std::endl;
     GetExtensionMatrices(mesh, boundaryNodes, freeNodes, nullSpace, columnSpace);
 
     std::vector<double> oneVal = {0};
     Eigen::Map<DvD> boundaryValsMap(oneVal.data(), 1,  1);
     DvD boundaryVals = (DvD) boundaryValsMap;
 
-    std::cout<<"Computing solution"<<std::endl;
+    std::cout<<"Computing solution..."<<std::endl;
     std::vector<DvD> solns = ComputeTransientSolution(StiffnessMatrix, MassMatrix, 
                                                         columnSpace, 
                                                         nullSpace, boundaryVals, 
