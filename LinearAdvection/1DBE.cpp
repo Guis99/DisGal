@@ -1,55 +1,5 @@
 #include "common.hpp"
 
-// std::vector<DvD> generalExplicitRK(SpD& A,
-//                                     SpD& columnSpace, SpD& nullSpace,
-//                                     DvD& boundaryVals,
-//                                     DvD& initialCondition,
-//                                     double timeStep,
-//                                     int numTimeSteps,
-//                                     int s, DD a,
-//                                     std::vector<double> b, std::vector<double> c) {
-//     std::vector<DvD> out;
-//     std::vector<DvD> kOps; kOps.reserve(s);
-//     SpD fPropOp;
-//     kOps[0] = A;
-//     for (int i=1; i<s; i++) {
-//         for (int j=0; j<i-1; j++) {
-
-//         }
-
-//     }
-
-//     DvD prevState = initialCondition;
-
-//     DvD x;
-//     for (int i=1; i<numTimeSteps; i++) {
-//         x = fPropOp * x;
-//         prevState = x;
-//         out.push_back(columnSpace * x);
-//     }
-// }
-
-// std::vector<DvD> generalImplicitRK(SpD& A,
-//                                     SpD& columnSpace, SpD& nullSpace,
-//                                     DvD& boundaryValues,
-//                                     DvD& initialCondition,
-//                                     double timeStep,
-//                                     int numTimeSteps,
-//                                     int s, DD a, std::vector<double> b, std::vector<double> c) {
-//     std::vector<DvD> out;
-//     std::vector<DvD> k; k.reserve(s);
-//     SpD fPropOp;
-//     k[0] = A * initialCondition;
-//     DvD prevState = initialCondition;
-
-//     DvD x;
-//     for (int i=1; i<numTimeSteps; i++) {
-//         x = fPropOp * x;
-//         prevState = x;
-//         out.push_back(columnSpace * x);
-//     }
-// }
-
 int main(int argc, char* argv[]) {
     int deg;
     int numElem;
@@ -61,7 +11,7 @@ int main(int argc, char* argv[]) {
     int numTimeSteps;
 
     std::cout<<"-----------------------------------------\n";
-    std::cout<<"| Initializing 1D linear advection solver |"<<std::endl;
+    std::cout<<"| Initializing 1D Burger's Equation solver |"<<std::endl;
     std::cout<<"-----------------------------------------\n";
 
     deg = std::stoi(argv[1]); numElem = std::stoi(argv[2]); width = std::stod(argv[3]);
@@ -121,7 +71,7 @@ int main(int argc, char* argv[]) {
     int numDofs = numElem * (deg + 1);
     std::cout<<"Generating system matrices..."<<std::endl;
     SpD MassMatrix(numDofs, numDofs); SpD StiffnessMatrix(numDofs, numDofs);
-    AssembleSystemMatrices(mesh, MassMatrix, StiffnessMatrix);
+    // AssembleSystemMatrices(mesh, MassMatrix, StiffnessMatrix);
 
     SpD nullSpace(nNodes, boundaryNodes.size());
     SpD columnSpace(nNodes, freeNodes.size());
@@ -133,7 +83,7 @@ int main(int argc, char* argv[]) {
     DvD boundaryVals = (DvD) boundaryValsMap;
 
     std::cout<<"Computing solution..."<<std::endl;
-    std::vector<DvD> solns = ComputeTransientSolution(StiffnessMatrix, MassMatrix, 
+    std::vector<DvD> solns = ComputeTransientSolutionNonLinear(StiffnessMatrix, MassMatrix, 
                                                         columnSpace, 
                                                         nullSpace, boundaryVals, 
                                                         initialCondition, timeStep, numTimeSteps,

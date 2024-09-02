@@ -6,33 +6,33 @@
 
 using namespace QTM;
 
-void exportToJson(QuadTreeMesh mesh, std::ostream& out) {
-    std::vector<std::shared_ptr<Cell>> allLeaves;
-    for (auto cell : mesh.topCells) {
-        auto leaves = cell->traverse();
-        allLeaves.insert(allLeaves.end(), leaves.begin(), leaves.end());
-    }
-    out << "{";
-    out << "\"children\": [\n";
+// void exportToJson(QuadTreeMesh mesh, std::ostream& out) {
+//     std::vector<std::shared_ptr<Cell>> allLeaves;
+//     for (auto cell : mesh.topCells) {
+//         auto leaves = cell->traverse();
+//         allLeaves.insert(allLeaves.end(), leaves.begin(), leaves.end());
+//     }
+//     out << "{";
+//     out << "\"children\": [\n";
 
-    out << "{";
-    out << "\"x\": " << allLeaves[0]->center[0] << ", ";
-    out << "\"y\": " << allLeaves[0]->center[1] << ", ";
-    out << "\"width\": " << 2*allLeaves[0]->width << ", ";
-    out << "\"level\": " << allLeaves[0]->level << ", ";
-    out << "\"CID\": " << allLeaves[0]->CID << "}\n ";
+//     out << "{";
+//     out << "\"x\": " << allLeaves[0]->center[0] << ", ";
+//     out << "\"y\": " << allLeaves[0]->center[1] << ", ";
+//     out << "\"width\": " << 2*allLeaves[0]->width << ", ";
+//     out << "\"level\": " << allLeaves[0]->level << ", ";
+//     out << "\"CID\": " << allLeaves[0]->CID << "}\n ";
 
-    for (int i=1; i<allLeaves.size(); i++) {
-        auto leaf = allLeaves[i];
-        out <<",{";
-        out << "\"x\": " << leaf->center[0] << ", ";
-        out << "\"y\": " << leaf->center[1] << ", ";
-        out << "\"width\": " << 2*leaf->width << ", ";
-        out << "\"level\": " << leaf->level << ", ";
-        out << "\"CID\": " << leaf->CID << "}\n ";
-    }
-    out << "]}";
-}
+//     for (int i=1; i<allLeaves.size(); i++) {
+//         auto leaf = allLeaves[i];
+//         out <<",{";
+//         out << "\"x\": " << leaf->center[0] << ", ";
+//         out << "\"y\": " << leaf->center[1] << ", ";
+//         out << "\"width\": " << 2*leaf->width << ", ";
+//         out << "\"level\": " << leaf->level << ", ";
+//         out << "\"CID\": " << leaf->CID << "}\n ";
+//     }
+//     out << "]}";
+// }
 
 int main(int argc, char* argv[]) {
     int nx;
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
     double c = 1;
     double k = 1;
 
-    DD z = PoissonSolve(mesh, c, k, source, bcs, penalty);
+    DD z = PMA::PoissonSolve(mesh, c, k, source, bcs, penalty);
 
     std::vector<std::array<double,2>> allNodePos = mesh.nodePositions;
 
@@ -95,5 +95,5 @@ int main(int argc, char* argv[]) {
     }
 
     std::ofstream outFile("quadtree.json");
-    exportToJson(mesh, outFile);
+    mesh.exportToJson(outFile);
 }

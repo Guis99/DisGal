@@ -48,7 +48,7 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
     std::vector<int> elemNodes;
     std::vector<int> elemLocals;
     std::vector<std::shared_ptr<QTM::Cell>> neighbors;
-    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    std::vector<Eigen::Triplet<double>> tripletList; 
     auto leaves = mesh.GetAllCells();
 
     std::vector<std::shared_ptr<QTM::Cell>> dirichletCells; 
@@ -68,6 +68,7 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
 
                 auto nodes = cell->nodes;
                 double jac = cell->width; // Jacobian factors
+                double penalty = alpha / jac / 2;
 
                 // jump matrix setup
                 DD topJump;
@@ -77,8 +78,8 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
                 DD topGradY;
 
                 topJump = nodalVals(elemLocals, localNodes[dir]);
-                topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals)/jac;
-                topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals)/jac;
+                topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals);
+                topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals);
 
                 // std::cout<<"tj: "<<topJump.rows()<<", "<<topJump.cols()<<std::endl;
                 // std::cout<<"tgx: "<<topGradX.rows()<<", "<<topGradX.cols()<<std::endl;
@@ -114,7 +115,7 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
                 // std::cout<<fluxMatrixY.rows()<<", "<<fluxMatrixY.cols()<<std::endl;
                 // std::cout<<quadWeights1D.rows()<<std::endl;
 
-                DD localElemMat = alpha*jac*jumpMatrix * quadWeights1D * jumpMatrixT;
+                DD localElemMat = penalty*jumpMatrix * jac*quadWeights1D * jumpMatrixT;
                 DD localElemMatGrad = (DD)(jumpMatrix * quadWeights1D * fluxMatrixX + 
                                         jumpMatrix * quadWeights1D * fluxMatrixY); // TODO: check that matrix dimensions are good
                 DD localElemMatGradT = (DD)(fluxMatrixXT * quadWeights1D * jumpMatrixT + 
@@ -227,7 +228,8 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                 elemLocals = mesh.GetTrimmedLocalNodes(cell->CID, elemNodes);
 
                 auto nodes = cell->nodes;
-                double jac = cell->width / 2; // Jacobian factors
+                double jac = cell->width; // Jacobian factors
+                double penalty = alpha / cell->width / 2;
 
                 std::vector<double> collectSourceVals; collectSourceVals.reserve(numNodes);
                 collectSourceVals.insert(collectSourceVals.begin(), dirichletIdx, dirichletIdx+numNodes);
@@ -242,8 +244,8 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                 DD topGradY;
 
                 topJump = nodalVals(elemLocals, localNodes[dir]);
-                topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals)/jac;
-                topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals)/jac;
+                topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals);
+                topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals);
 
                 DD topGradXT = topGradX.transpose();
                 DD topGradYT = topGradY.transpose();
@@ -273,7 +275,7 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                 std::cout<<sourceVector.rows()<<", "<<sourceVector.cols()<<std::endl;
 
                 // assemble local matrix 
-                DvD localElemMat = alpha*topJump * quadWeights1D * sourceVector/2;
+                DvD localElemMat = penalty*topJump * jac*quadWeights1D * sourceVector;
                 DvD localElemMatGrad = (DvD)(fluxMatrixX * quadWeights1D * sourceVector + 
                                         fluxMatrixY * quadWeights1D * sourceVector); 
 
@@ -383,6 +385,7 @@ DvD PMA::ComputeSolutionStationaryLinearNoElim(SpD& A, DvD& b) {
     SparseLU<SpD,COLAMDOrdering<int>> solver;
     solver.analyzePattern(A);
     PMA::FindRank(A);
+    // PMA::FindConditionNumber(A);
     solver.factorize(A);
     DvD x = solver.solve(b); 
 
@@ -425,6 +428,9 @@ DvD PMA::dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
     SpD Miscellaneous = PMA::BoundaryMatrix(inputMesh, k, isDirichletBC, dbcs, penaltyParam, package);
     std::cout<<"Assembling overall system matrix"<<std::endl;
     SpD StiffnessMatrix = KMatrix + PMatrix - SMatrix - SMatrixT + Miscellaneous;
+
+    // std::cout<<"All:/n"<<StiffnessMatrix<<std::endl;
+    // std::cout<<"Boundary:/n"<<Miscellaneous<<std::endl;
 
     std::cout<<"Assembling RHS vector"<<std::endl;
     DvD FMatrix = PMA::AssembleFVec(inputMesh, 1.0, source);

@@ -5,22 +5,34 @@ from matplotlib.animation import FuncAnimation
 import subprocess
 
 # discretization parameters
-deg = 5
-div = 10
+deg = 2
+div = 100
 Lx = 2
 
-timeLength = 1.75
-timeSteps = 500
+cfl = 1 / ((deg + 1)**2) / 4
+# cfl = 1 / (2 * deg + 1) / 4
+
+print(cfl)
+
+timeLength = 1.
+timeStepSize = cfl * Lx / div
+timeSteps = timeLength / timeStepSize
+
+print(timeLength, timeSteps)
+
+integrators = {"Forward Euler": 0, "Crank-Nicholson": 1, "RK4": 2, "GL1": 3, "GL2": 4}
+integratorIdx = "GL2"
 
 meshInfo = [str(deg), str(div), str(Lx)] # pack into list of strings
 
 initialCondition = "-((4 * x - 1) ^ 20 - 1)* .75"
 initialCondition = "2*x - .5"
+# initialCondition = "1"
 # initialCondition = "x"
 
 toRun = "t1DAdv.exe" 
 
-subprocess.run([toRun, *meshInfo, initialCondition, str(timeLength), str(timeSteps)])
+subprocess.run([toRun, *meshInfo, initialCondition, str(timeLength), str(timeSteps), str(integrators[integratorIdx])])
  
 # Creating dataset
 print("Loading results")

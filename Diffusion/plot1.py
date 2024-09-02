@@ -7,15 +7,16 @@ import matplotlib.patches as patches
 import subprocess
 
 # discretization parameters
-deg = 1
+deg = 2
 div = 10
 Lx = 1
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
 
-penalty = 20
+penalty = 500
 
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
+force = "0"
 
 numBoundaries = 4
 

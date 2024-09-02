@@ -1,4 +1,5 @@
 #include "..\include\MatrixAssembly.hpp"
+#include "..\..\Dependencies\Eigen\SVD"
 
 DD PMA::GenerateQuadWeights(std::vector<double> &gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes) {
     // Generate quadrature weight matrices
@@ -409,13 +410,13 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
                 // flux matrix setup
                 DD topGradX;
                 DD topGradY;
-                DD bottomGradX = normalX[oppdir] * combinedX(localNodes[oppdir], neighborLocals)/jac;
-                DD bottomGradY = normalY[oppdir] * combinedY(localNodes[oppdir], neighborLocals)/jac;
+                DD bottomGradX = normalX[oppdir] * combinedX(localNodes[oppdir], neighborLocals);
+                DD bottomGradY = normalY[oppdir] * combinedY(localNodes[oppdir], neighborLocals);
 
                 if (elm->level == neighbor->level) {
                     topJump = nodalValues(elemLocals, localNodes[dir]);
-                    topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals)/jac;
-                    topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals)/jac;
+                    topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals);
+                    topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals);
                 } else {
                     topJump = splitCellVals[dir](elemLocals, splitIdx[NI]);
                     topGradX = normalX[dir] * splitCellGradsX[dir](splitIdx[NI], elemLocals)/jac/2;
@@ -439,8 +440,8 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(fac * jac * jumpMatrix * quadWeights1D * fluxMatrixX + 
-                                    fac * jac * jumpMatrix * quadWeights1D * fluxMatrixY);
+                DD localElemMat = (DD)(fac * jumpMatrix * quadWeights1D * fluxMatrixX + 
+                                    fac * jumpMatrix * quadWeights1D * fluxMatrixY);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -451,152 +452,6 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
             }
         }
     }
-    // Declare and construct sparse matrix from triplets
-    SpD mat(nNodes,nNodes);
-    mat.setFromTriplets(tripletList.begin(), tripletList.end());
-    mat.makeCompressed();
-    return mat;
-}
-
-
-SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k, 
-                std::vector<bool> isDirichletBC,
-                std::vector<std::string> dbcs,
-                double alpha, 
-                PMA::quadUtils& package) {
-    // Integral on Dirichlet boundaries of: (a/h)*[u][v] - {k * grad(u) dot n}[v] - {k * grad(v) dot n}[u]
-    int deg = mesh.deg;
-    int numNodes = deg+1;
-    int numElemNodes = mesh.numElemNodes;
-    int nElements = mesh.numLeaves;
-    int nNodes = mesh.nNodes();
-
-    DD quadWeights1D = package.quadWeights1D;
-    DD nodalVals = package.nodalVals;
-
-    DD combinedX = package.combinedX;
-    DD combinedY = package.combinedY;
-
-    std::cout<<"--------package in boundary------------"<<std::endl;
-    std::cout<<combinedX.rows()<<", "<<combinedX.cols()<<std::endl;
-    std::cout<<combinedY.rows()<<", "<<combinedY.cols()<<std::endl;
-    std::cout<<"--------package in boundary------------"<<std::endl;
-    
-    std::array<DD, 4> splitCellVals = package.splitCellVals;
-    std::array<DD, 4> splitCellGradsX = package.splitCellGradsX;
-    std::array<DD, 4> splitCellGradsY = package.splitCellGradsY;
-
-    std::vector<QTM::Direction> directions = package.directions;        
-    std::vector<QTM::Direction> oppdirs = package.oppdirs;
-    std::vector<std::vector<int>> localNodes = package.localNodes;
-    // index vectors for split cell gauss points
-    std::vector<int> frontIdxs(numNodes, 0);  
-    std::vector<int> backIdxs(numNodes, 0);
-
-    for (int i=0; i<numNodes; i++) {
-        frontIdxs[i] = i;
-        backIdxs[i] = i+deg;
-    }
-
-    std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
-
-    double normalX[4] = {0,1,0,-1};
-    double normalY[4] = {1,0,-1,0};
-
-    std::vector<int> boundaryNodes;
-    std::vector<int> elemNodes;
-    std::vector<int> elemLocals;
-    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
-    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
-    auto leaves = mesh.GetAllCells();
-
-    std::vector<std::shared_ptr<QTM::Cell>> dirichletCells; 
-    std::vector<QTM::Direction> boundaryDirs = {QTM::Direction::N,
-                                   QTM::Direction::E,
-                                   QTM::Direction::S,
-                                   QTM::Direction::W};
-
-    for (int i=0; i<isDirichletBC.size(); i++) {
-        if (isDirichletBC[i]) {
-            QTM::Direction dir = boundaryDirs[i];
-            dirichletCells = mesh.boundaryCells[i];
-
-            for (const auto& cell : dirichletCells) {
-                elemNodes = mesh.GetGlobalElemNodes(cell->CID);
-                elemLocals = mesh.GetTrimmedLocalNodes(cell->CID, elemNodes);
-
-                auto nodes = cell->nodes;
-                double jac = cell->width / 2; // Jacobian factors
-
-                // jump matrix setup
-                DD topJump;
-
-                // flux matrix setup
-                DD topGradX;
-                DD topGradY;
-
-                topJump = nodalVals(elemLocals, localNodes[dir]);
-                topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals)/jac;
-                topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals)/jac;
-
-                // std::cout<<"tj: "<<topJump.rows()<<", "<<topJump.cols()<<std::endl;
-                // std::cout<<"tgx: "<<topGradX.rows()<<", "<<topGradX.cols()<<std::endl;
-                // std::cout<<"tgy: "<<topGradX.rows()<<", "<<topGradY.cols()<<std::endl;
-
-                // calculate jump matrix
-                DD jumpMatrix(elemNodes.size(), numNodes);
-                // std::cout<<"jm: "<<jumpMatrix.rows()<<", "<<jumpMatrix.cols()<<std::endl;
-                jumpMatrix << topJump;
-          
-                // Utils::printVec(elemNodes);
-                // Utils::printVec(localNodes[dir]);
-                // Utils::printVec(elemLocals);
-
-                DD fluxMatrixX(numNodes, elemNodes.size());
-                DD fluxMatrixY(numNodes, elemNodes.size());
-
-                // std::cout<<"fmX: "<<fluxMatrixX.rows()<<", "<<fluxMatrixX.cols()<<std::endl;
-                // std::cout<<"fmY: "<<fluxMatrixY.rows()<<", "<<fluxMatrixY.cols()<<std::endl;
-
-                // place partial derivatives in combined mat
-                fluxMatrixX << topGradX;
-                fluxMatrixY << topGradY;
-
-                // assemble local matrix 
-                DD jumpMatrixT = (DD)(jumpMatrix.transpose());
-                DD fluxMatrixXT = (DD)(fluxMatrixX.transpose());
-                DD fluxMatrixYT = (DD)(fluxMatrixY.transpose());
-
-                // std::cout<<"miscellaneous matrix assembly check"<<std::endl;
-                // std::cout<<jumpMatrix.rows()<<", "<<jumpMatrix.cols()<<std::endl;
-                // std::cout<<fluxMatrixX.rows()<<", "<<fluxMatrixX.cols()<<std::endl;
-                // std::cout<<fluxMatrixY.rows()<<", "<<fluxMatrixY.cols()<<std::endl;
-                // std::cout<<quadWeights1D.rows()<<std::endl;
-
-                DD localElemMat = alpha*jumpMatrix * quadWeights1D * jumpMatrixT/2;
-                DD localElemMatGrad = (DD)(jumpMatrix * quadWeights1D * fluxMatrixX + 
-                                        jumpMatrix * quadWeights1D * fluxMatrixY); // TODO: check that matrix dimensions are good
-                DD localElemMatGradT = (DD)(fluxMatrixXT * quadWeights1D * jumpMatrixT + 
-                                        fluxMatrixYT * quadWeights1D * jumpMatrixT);
-
-                localElemMat -= localElemMatGrad;
-                localElemMat -= localElemMatGradT;
-
-                boundaryNodes.reserve(elemNodes.size());
-                boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
-                
-                for (int j=0; j<boundaryNodes.size(); j++) {
-                    for (int i=0; i<boundaryNodes.size(); i++) {
-                        tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
-                    }
-                }
-                boundaryNodes.clear();
-            }
-        } else {
-            continue;
-        }
-    }
-        
     // Declare and construct sparse matrix from triplets
     SpD mat(nNodes,nNodes);
     mat.setFromTriplets(tripletList.begin(), tripletList.end());
@@ -648,7 +503,7 @@ DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
         // Generate i,j,v triplets
         for (int i=0; i<numElemNodes; i++) {
             // tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
-            out[nodes[0]+i] = localElemMat[i];
+            out[nodes[0]+i] += localElemMat[i];
         }  
     }
 
@@ -744,6 +599,16 @@ void PMA::GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
     nullSpace.setFromTriplets(tripletListNS.begin(), tripletListNS.end());
     columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
 }
+
+// void PMA::FindConditionNumber(SpD& mat) {
+//     using namespace Eigen;
+//     Eigen::JacobiSVD<SpD> svd(mat);
+
+//     double cond = svd.singularValues()(0) 
+//     / svd.singularValues()(svd.singularValues().size()-1);
+
+//     std::cout << "Condition number: " << cond << std::endl;
+// }
 
 void PMA::FindRank(SpD& mat) {
     Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> qr;

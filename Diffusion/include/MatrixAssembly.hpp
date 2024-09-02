@@ -78,6 +78,7 @@ void GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
 DvD ComputeSolutionStationaryLinear(SpD& KMatrix, DvD& FMatrix, SpD& columnSpace, SpD& nullSpace, DvD& dirichletBoundaryVals);
 DvD ComputeSolutionStationaryLinearNoElim(SpD& A, DvD& b);
 void FindRank(SpD& mat);
+void FindConditionNumber(SpD& mat);
 
 DvD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 double c,

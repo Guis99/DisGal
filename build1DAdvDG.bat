@@ -1,0 +1,1 @@
+g++ .\LinearAdvection\1D.cpp .\Dependencies\Utils\Utils.cpp -o LinearAdvection\t1DAdv.exe -O3
