@@ -202,8 +202,7 @@ std::vector<DvD> TimeStep::solver_GL2_nonlinear(SpD &A,
                             DvD &boundaryVals, 
                             DvD &initialCondition,
                             double timeStep,
-                            int numTimeSteps,
-                            std::function<void> derivative) {
+                            int numTimeSteps) {
     std::vector<DvD> out; out.reserve(numTimeSteps);
     out.push_back(columnSpace * initialCondition);
     DvD prevState = initialCondition;
@@ -295,16 +294,12 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
 
     // Add contributions from flux terms
     for (auto &elm : mesh.elements) {
-        int leftVal = elm.dofs[0];
         int rightVal = (elm.dofs).back(); 
-        if (elm.ID == 0) {
-            tripletListK.emplace_back(rightVal, rightVal, -1.0);
-        } else if (elm.ID == nElements - 1) {
-            tripletListK.emplace_back(leftVal, leftVal - 1, 1.0); // left boundary
+        if (elm.ID == nElements - 1) {
             tripletListK.emplace_back(rightVal, rightVal, -1.0); // right boundary
         } else {
-            tripletListK.emplace_back(leftVal, leftVal - 1, 1.0); // left boundary
-            tripletListK.emplace_back(rightVal, rightVal, -1.0); // right boundary
+            tripletListK.emplace_back(rightVal, rightVal, -1.0); // upwind flux, outward jump
+            tripletListK.emplace_back(rightVal + 1, rightVal, 1.0); // upwind flux, inward jump
         }
     }
 
@@ -314,75 +309,6 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
 }
 
 std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix, 
-                                SpD &MassMatrix, SpD &columnSpace, 
-                                SpD &nullSpace, DvD &boundaryVals, 
-                                DvD &initialCondition,
-                                double timeStep,
-                                int numTimeSteps,
-                                int integrator) {
-    // Eliminate boundary rows and columns
-    SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
-    SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
-
-    SpD combinedMats = M11 - timeStep * K11 / 2;
-    int system_size = combinedMats.rows();
-    SpD dummyId(system_size, system_size); 
-    std::vector<Eigen::Triplet<double>> tripletListID;
-
-    tripletListID.reserve(combinedMats.rows());
-
-    for (int i=0; i<combinedMats.rows(); i++) {
-        tripletListID.emplace_back(i, i, 1.0);
-    }
-    
-    // Crank-Nicholson-specifc
-    dummyId.setFromTriplets(tripletListID.begin(), tripletListID.end());
-    Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolver;    
-    LuSolver.analyzePattern(combinedMats);
-    LuSolver.factorize(combinedMats);
-    SpD combinedMatsInv = LuSolver.solve(dummyId);
-
-    // Invert diagonal mass matrix
-    Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolverMM;    
-    LuSolverMM.analyzePattern(M11);
-    LuSolverMM.factorize(M11);
-
-    SpD A = LuSolverMM.solve(dummyId) * K11;
-
-
-    // std::cout<<"inverse"<<std::endl<<combinedMatsInv<<std::endl;
-
-    std::vector<DvD> out;
-    out.push_back(columnSpace * initialCondition);
-    DvD prevState = initialCondition;
-    DvD x;
-
-    switch (integrator) {
-        case 0: // Forward Euler
-            break;
-        case 1: // Crank-Nicholson
-            break;
-        case 2: // RK4
-            return TimeStep::solver_RK4(A, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
-            break;
-        case 3: // GL1
-            return TimeStep::solver_GL1(A, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
-            break;
-        case 4: // GL2
-            return TimeStep::solver_GL2(A, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
-            break;
-    }
-
-    // Time-stepping
-    for (int i=1; i<numTimeSteps; i++) {
-        x = combinedMatsInv * (M11 + timeStep * K11 / 2) * prevState;
-        prevState = x;
-        out.push_back(columnSpace * x);
-    }
-    return out;
-}
-
-std::vector<DvD> ComputeTransientSolutionNonLinear(SpD &StiffnessMatrix, 
                                 SpD &MassMatrix, SpD &columnSpace, 
                                 SpD &nullSpace, DvD &boundaryVals, 
                                 DvD &initialCondition,

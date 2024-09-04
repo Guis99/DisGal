@@ -1,5 +1,112 @@
 #include "common.hpp"
 
+std::vector<DvD> TimeStep::solver_RK4_NonLinear_Burger(SpD &A, 
+                            SpD &columnSpace, SpD &nullSpace, 
+                            DvD &boundaryVals, 
+                            DvD &initialCondition,
+                            double timeStep,
+                            int numTimeSteps) {
+    std::vector<DvD> out; out.reserve(numTimeSteps);
+    out.push_back(columnSpace * initialCondition);
+    DvD prevState = initialCondition;
+    DvD x;
+    DvD k1; DvD k2; DvD k3; DvD k4;
+
+    // auto systemDeriv = [](SpD& A, DvD&& state) {{
+        // return state;}
+        // return (DvD)(A * state.asDiagonal() * state);
+    // };
+
+    
+    for (int i=1; i<numTimeSteps; i++) {
+        k1 = A * prevState.asDiagonal() * prevState;
+        k2 = A * (prevState + .5 * timeStep * k1).asDiagonal() * (prevState + .5 * timeStep * k1);
+        k3 = A * (prevState + .5 * timeStep * k2).asDiagonal() * (prevState + .5 * timeStep * k2);
+        k4 = A * (prevState + timeStep * k3).asDiagonal() * (prevState + timeStep * k3);
+
+        // k1 = systemDeriv(A, prevState);
+        // k2 = systemDeriv(A, prevState + .5 * timeStep * k1);
+        // k3 = systemDeriv(A, prevState + .5 * timeStep * k2);
+        // k4 = systemDeriv(A, prevState + timeStep * k3);
+        // k2 = A * (prevState + .5 * timeStep * k1);
+        // k3 = A * (prevState + .5 * timeStep * k2);
+        // k4 = A * (prevState + timeStep * k3);
+
+        x = prevState + (timeStep / 6) * (k1 + 2*k2 + 2*k3 + k4);
+        DvD diff = x - prevState;
+        // std::cout<<"diff at iter "<<i<<": "<< diff.norm()<<std::endl;
+        prevState = x;
+        out.push_back(columnSpace * x);
+    }
+
+    return out;
+}
+
+std::vector<DvD> ComputeTransientSolutionBurger(SpD &StiffnessMatrix, 
+                                SpD &MassMatrix, SpD SIPMatrix,
+                                SpD &columnSpace, 
+                                SpD &nullSpace, DvD &boundaryVals, 
+                                DvD &initialCondition,
+                                double timeStep,
+                                int numTimeSteps,
+                                int integrator) {
+    // Eliminate boundary rows and columns
+    SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
+    SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
+    SpD SIP11 = columnSpace.transpose() * SIPMatrix * columnSpace;
+
+    int system_size = K11.rows();
+    SpD dummyId(system_size, system_size); 
+    std::vector<Eigen::Triplet<double>> tripletListID;
+
+    tripletListID.reserve(system_size);
+
+    for (int i=0; i<system_size; i++) {
+        tripletListID.emplace_back(i, i, 1.0);
+    }
+
+    dummyId.setFromTriplets(tripletListID.begin(), tripletListID.end());
+
+    // Invert diagonal mass matrix
+    Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolverMM;    
+    LuSolverMM.analyzePattern(M11);
+    LuSolverMM.factorize(M11);
+
+    SpD M11_Inv = LuSolverMM.solve(dummyId);
+
+    // std::cout<<"inverse"<<std::endl<<combinedMatsInv<<std::endl;
+
+    std::vector<DvD> out;
+    out.push_back(columnSpace * initialCondition);
+    DvD prevState = initialCondition;
+    DvD x;
+    SpD K1 = .5 * M11_Inv * (K11 - M11);
+
+    // std::cout<<"K1: "<<K1<<std::endl;
+    // std::cout<<"M11_Inv: "<<M11_Inv<<std::endl;
+    // std::cout<<"K11: "<<K11<<std::endl;
+    // std::cout<<"M11: "<<M11<<std::endl;
+
+    switch (integrator) {
+        case 0: // Forward Euler
+            return out;
+            break;
+        case 1: // Crank-Nicholson
+            return out;
+            break;
+        case 2: // RK4
+            return TimeStep::solver_RK4_NonLinear_Burger(K1, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
+            break;
+        case 3: // GL1
+            return out;
+            break;
+        case 4: // GL2
+            return TimeStep::solver_GL2(K1, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
+            break;
+    }
+    return out;
+}
+
 int main(int argc, char* argv[]) {
     int deg;
     int numElem;
@@ -26,7 +133,7 @@ int main(int argc, char* argv[]) {
                                             "GL1",
                                             "GL2"};
 
-    std::cout<<"ts: "<<timeStep<<", tl: "<<timeLength<<", nts: "<<numTimeSteps<<std::endl;
+    int systemForm = std::stoi(argv[8]); // 0 = fully non-linear state vector, 1 = pseudo-linear matrix form
 
     std::cout<<"Order (polynomial degree): "<<deg<<"\nnx: "<<numElem<<std::endl;
     std::cout<<"-------------------------"<<std::endl;
@@ -37,8 +144,7 @@ int main(int argc, char* argv[]) {
     
     double spacing = width / numElem;
 
-    std::cout<<std::endl<<"Generating mesh..."<<std::endl;
-    std::cout<<"-------------------------"<<std::endl;
+    std::cout<<"Generating mesh..."<<std::endl;
     BasicMesh1D mesh = CreateMesh(deg, numElem, spacing);
     auto nodes = mesh.nodes;
     int nNodes = nodes.size();
@@ -71,7 +177,7 @@ int main(int argc, char* argv[]) {
     int numDofs = numElem * (deg + 1);
     std::cout<<"Generating system matrices..."<<std::endl;
     SpD MassMatrix(numDofs, numDofs); SpD StiffnessMatrix(numDofs, numDofs);
-    // AssembleSystemMatrices(mesh, MassMatrix, StiffnessMatrix);
+    AssembleSystemMatrices(mesh, MassMatrix, StiffnessMatrix);
 
     SpD nullSpace(nNodes, boundaryNodes.size());
     SpD columnSpace(nNodes, freeNodes.size());
@@ -83,7 +189,8 @@ int main(int argc, char* argv[]) {
     DvD boundaryVals = (DvD) boundaryValsMap;
 
     std::cout<<"Computing solution..."<<std::endl;
-    std::vector<DvD> solns = ComputeTransientSolutionNonLinear(StiffnessMatrix, MassMatrix, 
+    std::vector<DvD> solns = ComputeTransientSolutionBurger(StiffnessMatrix, MassMatrix, 
+                                                        MassMatrix,
                                                         columnSpace, 
                                                         nullSpace, boundaryVals, 
                                                         initialCondition, timeStep, numTimeSteps,
@@ -98,8 +205,8 @@ int main(int argc, char* argv[]) {
     }
 
     Eigen::Map<DD> xOffsets(xPositions.data(), nNodes, 1);
-    std::ofstream fileX("xt.txt");
-    std::ofstream fileZ("zt.txt");
+    std::ofstream fileX("x_be.txt");
+    std::ofstream fileZ("z_be.txt");
 
     if (fileZ.is_open())
     {

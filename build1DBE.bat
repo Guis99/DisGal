@@ -1,0 +1,1 @@
+g++ .\LinearAdvection\1DBE.cpp .\LinearAdvection\common.cpp .\Dependencies\Utils\Utils.cpp -o LinearAdvection\t1DBE.exe -O3

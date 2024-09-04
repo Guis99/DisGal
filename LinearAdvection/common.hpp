@@ -52,6 +52,13 @@ namespace TimeStep {
                                 double timeStep,
                                 int numTimeSteps);
 
+    std::vector<DvD> solver_RK4_NonLinear_Burger(SpD &A, 
+                                SpD &columnSpace, SpD &nullSpace, 
+                                DvD &boundaryVals, 
+                                DvD &initialCondition,
+                                double timeStep,
+                                int numTimeSteps);
+
     std::vector<DvD> solver_GL1(SpD &A, 
                                 SpD &columnSpace, SpD &nullSpace, 
                                 DvD &boundaryVals, 
@@ -71,8 +78,7 @@ namespace TimeStep {
                                 DvD &boundaryVals, 
                                 DvD &initialCondition,
                                 double timeStep,
-                                int numTimeSteps, 
-                                std::function<void> derivative);
+                                int numTimeSteps);
 }
 
 void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMatrix);
@@ -85,8 +91,9 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
                                 int numTimeSteps,
                                 int integrator);
 
-std::vector<DvD> ComputeTransientSolutionNonLinear(SpD &StiffnessMatrix, 
-                                SpD &MassMatrix, SpD &columnSpace, 
+std::vector<DvD> ComputeTransientSolutionBurger(SpD &StiffnessMatrix, 
+                                SpD &MassMatrix, SpD SIPMatrix,
+                                SpD &columnSpace, 
                                 SpD &nullSpace, DvD &boundaryVals, 
                                 DvD &initialCondition,
                                 double timeStep,
