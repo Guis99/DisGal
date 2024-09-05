@@ -476,6 +476,7 @@ DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     auto allNodesPos = mesh.AllNodePos();
     auto startpoint = allNodesPos.data(); auto allocSize = allNodesPos.size();
     auto fEval = Utils::EvalSymbolicBC(startpoint, allocSize, evalStr);
+    Utils::printVec(fEval);
 
     // Initialize i,j,v triplet list for sparse matrix
     std::vector<Eigen::Triplet<double>> tripletList;
@@ -511,6 +512,7 @@ DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     // SpD mat(nNodes,1);
     // mat.setFromTriplets(tripletList.begin(), tripletList.end());
     // mat.makeCompressed();
+    std::cout<<"F_in: "<<out<<std::endl;
     return out;
 }
 
@@ -582,6 +584,7 @@ void PMA::GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
     int nNodes = inputMesh.nNodes();
 
     std::sort(boundaryNodes.begin(), boundaryNodes.end());
+    std::sort(freeNodes.begin(), freeNodes.end());
 
     std::vector<Eigen::Triplet<double>> tripletListNS;
     std::vector<Eigen::Triplet<double>> tripletListCS;
@@ -732,6 +735,7 @@ DvD PMA::PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     // std::cout<<"right side (penalty): \n"<<B12<<std::endl;
 
     std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
+    std::cout<<"F: "<<FMatrix<<std::endl;
     DvD x = PMA::ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
     std::cout<<"System solved!"<<std::endl;
     return x;

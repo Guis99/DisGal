@@ -1,6 +1,6 @@
 #include "..\include\NSMatrixAssembly.hpp"
 
-SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+SpD NSMA::PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // Oriented as V-P.
     int deg = mesh.deg;
     int numNodes = deg+1;
@@ -26,7 +26,7 @@ SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     Eigen::Map<DD> AT(AInitializer.data(), numNodes, numNodes); 
     DD A = (DD)(AT.transpose());
     // Generate quadrature weight matrices
-    DD weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, numNodes, numNodes, numElemNodes);
+    DD weightMat = PMA::GenerateQuadWeights(gaussPoints, gaussPoints, numNodes, numNodes, numElemNodes);
     // Generate mass matrices
     DD B; B.setIdentity(numNodes, numNodes);
     
@@ -45,7 +45,7 @@ SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
 
     // Initialize i,j,v triplet list for sparse matrix
     std::vector<Eigen::Triplet<double>> tripletList;
-    tripletList.reserve(nElements * numElemNodes * numElemNodes);
+    tripletList.reserve(nNodes * nNodes);
 
     auto combineT = (DD)combined.transpose();
 
@@ -55,7 +55,7 @@ SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     for (auto &elm : leaves) {
         auto jac = elm->width;
         // calculate local matrix
-        localElemMat = jac*combined*weightMat;
+        localElemMat = jac*combineT*weightMat;
  
         // Get nodes in element
         auto nodeBound = elm->nodes[0];
@@ -75,7 +75,7 @@ SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     return mat;
 }
 
-SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+SpD NSMA::PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // pressure jump, velocity flux average, U-Q
     // <u dot n> [q] 
     int deg = mesh.deg;
@@ -231,7 +231,7 @@ SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(fac * jac * jumpMatrix *  quadWeights1D * fluxMatrix);
+                DD localElemMat = (DD)(fac * jumpMatrix * jac*quadWeights1D * fluxMatrix);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -251,7 +251,7 @@ SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     return mat;
 }
 
-SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+SpD NSMA::PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // pressure average, velocity flux jump, V-P
     // [v dot n] <p>
     int deg = mesh.deg;
@@ -407,7 +407,7 @@ SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
                 boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
 
                 // assemble local matrix 
-                DD localElemMat = (DD)(fac * jac * jumpMatrix * quadWeights1D * fluxMatrix);
+                DD localElemMat = (DD)(fac * jumpMatrix * jac*quadWeights1D * fluxMatrix);
 
                 for (int j=0; j<boundaryNodes.size(); j++) {
                     for (int i=0; i<boundaryNodes.size(); i++) {
@@ -427,7 +427,7 @@ SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     return mat;
 }
 
-SpD PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu) {
+SpD NSMA::PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
@@ -571,7 +571,8 @@ SpD PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu) {
     return mat;
 }
 
-SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+SpD NSMA::PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
+    // <q dot n> [u]
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
@@ -751,12 +752,12 @@ SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
 //     // Implements boundary condition of form mu * n dot grad(u) - p*n = 0
 // }
 
-SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
+SpD NSMA::AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
                             SpD& dgPoissonMat,
                             SpD& mat1, 
                             SpD& mat2,
-                            SpD& mat1T,
-                            SpD& mat2T) {
+                            SpD& mat3,
+                            SpD& mat4) {
     int nNodes = mesh.nNodes();
     int offset1 = nNodes; 
     int offset2 = 2*nNodes;
@@ -765,7 +766,7 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
     std::vector<double> gaussPoints = mesh.gaussPoints;
     SpD PressurePenalty = PressurePenaltyMatrix(mesh, 1);
     int totalNNZ = 2*dgPoissonMat.nonZeros() + PressurePenalty.nonZeros() +
-                    mat1T.nonZeros() + mat2T.nonZeros() + 
+                    mat3.nonZeros() + mat4.nonZeros() + 
                     mat1.nonZeros() + mat2.nonZeros() + 2*nNodes;
     std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
 
@@ -789,14 +790,14 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
         }
     }
 
-    for (int k = 0; k < mat1T.outerSize(); ++k) {
-        for (SpD::InnerIterator it(mat1T, k); it; ++it) {
+    for (int k = 0; k < mat3.outerSize(); ++k) {
+        for (SpD::InnerIterator it(mat3, k); it; ++it) {
             tripletList.emplace_back(it.row()+offset2, it.col(), it.value());
         }
     }
 
-    for (int k = 0; k < mat2T.outerSize(); ++k) {
-        for (SpD::InnerIterator it(mat2T, k); it; ++it) {
+    for (int k = 0; k < mat4.outerSize(); ++k) {
+        for (SpD::InnerIterator it(mat4, k); it; ++it) {
             tripletList.emplace_back(it.row()+offset2, it.col()+offset1, it.value());
         }
     }
@@ -809,10 +810,10 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
 
     // add zero mean pressure constraint 
     int currDofIndx = offset2;
-    auto weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, mesh.deg+1, mesh.deg+1, numElemNodes);
+    auto weightMat = PMA::GenerateQuadWeights(gaussPoints, gaussPoints, mesh.deg+1, mesh.deg+1, numElemNodes);
     std::vector<double> weights(weightMat.diagonal().begin(), weightMat.diagonal().end());
     for (auto elm : mesh.leaves) {
-        double area = (elm->width * elm->width);
+        double area = elm->width * elm->width;
         for (int i=0; i<numElemNodes; i++) {
             tripletList.emplace_back(offset3, currDofIndx, area * weights[i]);
             tripletList.emplace_back(currDofIndx, offset3, area * weights[i]);
@@ -825,7 +826,7 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
     return mat;
 }
 
-DvD AssembleStokesSource(QTM::QuadTreeMesh& mesh, 
+DvD NSMA::AssembleStokesSource(QTM::QuadTreeMesh& mesh, 
                             DvD& XSource,
                             DvD& YSource) {
     int nNodes = mesh.nNodes();
@@ -864,7 +865,7 @@ DvD AssembleStokesSource(QTM::QuadTreeMesh& mesh,
     return out;
 }
 
-DvD EvalPartialSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
+DvD NSMA::EvalPartialSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, 
                                     std::vector<std::vector<int>>& boundaryNodes, 
                                     std::vector<std::string>& strs, 
                                     std::vector<int>& allBoundaryNodes, 
@@ -911,7 +912,7 @@ DvD EvalPartialSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh,
     return (DvD)boundaryNodeValuesVec;
 }
 
-SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
+SpD NSMA::AssembleStokesSystem(QTM::QuadTreeMesh& mesh, 
                             SpD& dgPoissonMat,
                             SpD& QVMatrixX, 
                             SpD& QVMatrixY) {
@@ -949,10 +950,10 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
 
     // add zero mean pressure constraint 
     int currDofIndx = offset2;
-    auto weightMat = GenerateQuadWeights(gaussPoints, gaussPoints, mesh.deg+1, mesh.deg+1, numElemNodes);
+    auto weightMat = PMA::GenerateQuadWeights(gaussPoints, gaussPoints, mesh.deg+1, mesh.deg+1, numElemNodes);
     std::vector<double> weights(weightMat.diagonal().begin(), weightMat.diagonal().end());
     for (auto elm : mesh.leaves) {
-        double area = (elm->width * elm->width);
+        double area = elm->width * elm->width;
         for (int i=0; i<numElemNodes; i++) {
             tripletList.emplace_back(offset3, currDofIndx, area * weights[i]);
             tripletList.emplace_back(currDofIndx, offset3, area * weights[i]);
@@ -965,7 +966,7 @@ SpD AssembleStokesSystem(QTM::QuadTreeMesh& mesh,
     return mat;
 }
 
-DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
+DvD NSMA::IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                 double rho,
                 double mu,
                 double penaltyParam,
@@ -992,30 +993,27 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
         std::cout<<i<<std::endl;
     }
 
+    PMA::quadUtils package = PMA::GenerateAssemblyPackage(inputMesh);
+
     std::cout<<"Assembling stiffness matrix...";
-    SpD KMatrix = StiffnessMatrix(inputMesh, mu); 
-    std::cout<<" finished!"<<std::endl;
+    SpD KMatrix = PMA::StiffnessMatrix(inputMesh, mu); 
     
     std::cout<<"Assembling divergence matrix...";
-    SpD PVMatrixX = PVMatrix(inputMesh, 1);
-    SpD PVMatrixY = PVMatrix(inputMesh, 2); 
-    std::cout<<" finished!"<<std::endl;
+    SpD PVMatrixX = NSMA::PVMatrix(inputMesh, 1);
+    SpD PVMatrixY = NSMA::PVMatrix(inputMesh, 2); 
 
     std::cout<<"Assembling penalty matrix...";
-    SpD PMatrix = PenaltyMatrix(inputMesh, mu, penaltyParam); 
-    std::cout<<" finished!"<<std::endl;
+    SpD PMatrix = PMA::PenaltyMatrix(inputMesh, mu, penaltyParam, package);
 
     std::cout<<"Assembling flux matrix...";
-    SpD SMatrix = FluxMatrix(inputMesh, mu); 
-    std::cout<<" finished!"<<std::endl;
+    SpD SMatrix = PMA::FluxMatrix(inputMesh, mu, package); 
 
     std::cout<<"Assembling pressure flux matrix...";
-    SpD PAMatrixX = PressureAvgMatrix(inputMesh, 1); // pressure average, velocity jump
-    SpD PAMatrixY = PressureAvgMatrix(inputMesh, 2);
+    SpD PAMatrixX = NSMA::PressureAvgMatrix(inputMesh, 1); // pressure average, velocity jump
+    SpD PAMatrixY = NSMA::PressureAvgMatrix(inputMesh, 2);
 
-    SpD PJMatrixX = PressureJumpMatrix(inputMesh, 1); // pressure jump, velocity average
-    SpD PJMatrixY = PressureJumpMatrix(inputMesh, 2); 
-    std::cout<<" finished!"<<std::endl;
+    SpD PJMatrixX = NSMA::PressureJumpMatrix(inputMesh, 1); // pressure jump, velocity average
+    SpD PJMatrixY = NSMA::PressureJumpMatrix(inputMesh, 2); 
 
     std::cout<<"Assembling combined LHS matrix...";
     SpD SMatrixT = (SpD)(SMatrix.transpose()); 
@@ -1031,8 +1029,8 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     //                         combinedPVMatrixX, combinedPVMatrixY,
     //                         combinedQUMatrixX, combinedQUMatrixY); std::cout<<" finished!"<<std::endl;
 
-    SpD PJMatrixXT = PressureFluxMatrix(inputMesh, 1);
-    SpD PJMatrixYT = PressureFluxMatrix(inputMesh, 2);
+    SpD PJMatrixXT = NSMA::PressureFluxMatrix(inputMesh, 1);
+    SpD PJMatrixYT = NSMA::PressureFluxMatrix(inputMesh, 2);
 
     SpD mat1 = -PVMatrixX + PAMatrixX; // pressure gradient
     SpD mat2 = -PVMatrixY + PAMatrixY;
@@ -1049,17 +1047,20 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     // SpD mat1Int = -PVMatrixX + PJMatrixXT; // pressure gradient
     // SpD mat2Int = -PVMatrixY + PJMatrixYT;
 
-    SpD mat1T = (SpD)(mat1.transpose()); // continuity
-    SpD mat2T = (SpD)(mat2.transpose());
+    SpD mat3 = (SpD)(mat1.transpose()); // continuity
+    SpD mat4 = (SpD)(mat2.transpose());
 
-    SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, dgPoissonMat, 
+    mat3 = PVMatrixX - PJMatrixX;
+    mat4 = PVMatrixY - PJMatrixY;
+
+    SpD StiffnessMatrix = NSMA::AssembleStokesSystem(inputMesh, dgPoissonMat, 
                             mat1, mat2,
-                            mat1T, mat2T); std::cout<<" finished!"<<std::endl;
+                            mat3, mat4);
 
     std::cout<<"Assembling RHS vector...";
-    DvD FMatrixX = AssembleFVec(inputMesh, 1.0, source[0]);
-    DvD FMatrixY = AssembleFVec(inputMesh, 1.0, source[1]);
-    DvD FMatrix = AssembleStokesSource(inputMesh, FMatrixX, FMatrixY);
+    DvD FMatrixX = PMA::AssembleFVec(inputMesh, 1.0, source[0]);
+    DvD FMatrixY = PMA::AssembleFVec(inputMesh, 1.0, source[1]);
+    DvD FMatrix = NSMA::AssembleStokesSource(inputMesh, FMatrixX, FMatrixY);
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling boundary condition vector...";
@@ -1070,7 +1071,6 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     for (int i=0; i<boundaryNodes.size(); i++) {
         if (velEss[i]) {
             VDN.push_back(boundaryNodes[i]);
-            continue;
         } else {
             for (int vn : boundaryNodes[i]) {
                 freeNodesAll.push_back(vn);
@@ -1086,15 +1086,13 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
             }
         }
     }
-    DvD UDirichlet = EvalPartialSymbolicBoundaryCond(inputMesh, VDN, Ubcs, allBoundaryNodes, 0);
-    DvD VDirichlet = EvalPartialSymbolicBoundaryCond(inputMesh, VDN, Vbcs, allBoundaryNodes, 1);
-    DvD PDirichlet = EvalPartialSymbolicBoundaryCond(inputMesh, PDN, Pbcs, allBoundaryNodes, 2);
+    DvD UDirichlet = NSMA::EvalPartialSymbolicBoundaryCond(inputMesh, VDN, Ubcs, allBoundaryNodes, 0);
+    DvD VDirichlet = NSMA::EvalPartialSymbolicBoundaryCond(inputMesh, VDN, Vbcs, allBoundaryNodes, 1);
+    DvD PDirichlet = NSMA::EvalPartialSymbolicBoundaryCond(inputMesh, PDN, Pbcs, allBoundaryNodes, 2);
     DvD dirichletBoundaryVals(2*UDirichlet.rows() + PDirichlet.rows());
     dirichletBoundaryVals << UDirichlet, 
                             VDirichlet, 
                             PDirichlet;
-
-    std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Assembling null-orth matrix...";
     for (int i=0; i<3; i++) {
@@ -1103,15 +1101,20 @@ DvD IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
             freeNodesAll.push_back(offset + fn);
         }
     }
-    std::sort(freeNodesAll.begin(), freeNodesAll.end());
+
+    freeNodesAll.push_back(3 * nNodes);
+
+    std::cout<<"ntn: "<<3 * nNodes + 1<<std::endl;
+    std::cout<<"nbn: "<<allBoundaryNodes.size()<<std::endl;
+    std::cout<<"nfn: "<<freeNodesAll.size()<<std::endl;
 
     SpD nullSpace(3*nNodes+1, allBoundaryNodes.size());
     SpD columnSpace(3*nNodes+1, freeNodesAll.size());
-    GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodesAll, nullSpace, columnSpace);
+    PMA::GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodesAll, nullSpace, columnSpace);
     std::cout<<" finished!"<<std::endl;
 
     std::cout<<"Solving system with "<<freeNodesAll.size()<<" degrees of freedom... ";
-    DvD x = ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
+    DvD x = PMA::ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
     std::cout<<"System solved!"<<std::endl;
     std::cout<<"multiplier: "<<x(3*nNodes)<<std::endl;
     return x;

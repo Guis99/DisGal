@@ -162,19 +162,26 @@ std::vector<DvD> TimeStep::solver_GL2(SpD &A,
     out.push_back(columnSpace * initialCondition);
     DvD prevState = initialCondition;
     DvD x;
-    DvD k1; DvD k2; DvD k3; DvD k4;
 
     // Generate identity matrix
-    int system_size = A.rows();
-    SpD dummyId(system_size, system_size); 
+    int n = A.rows();
+    SpD I_n(n, n); 
+    SpD I_2n(2*n, 2*n);
     std::vector<Eigen::Triplet<double>> tripletListID;
+    std::vector<Eigen::Triplet<double>> tripletListIDTwo;
+    std::cout<<"time1"<<std::endl;
 
-    tripletListID.reserve(system_size);
+    tripletListID.reserve(n);
 
-    for (int i=0; i<system_size; i++) {
+    for (int i=0; i<n; i++) {
         tripletListID.emplace_back(i, i, 1.0);
     }
-    dummyId.setFromTriplets(tripletListID.begin(), tripletListID.end());
+    I_n.setFromTriplets(tripletListID.begin(), tripletListID.end());
+
+    for (int i=0; i<2*n; i++) {
+        tripletListIDTwo.emplace_back(i, i, 1.0);
+    }
+    I_2n.setFromTriplets(tripletListIDTwo.begin(), tripletListIDTwo.end());
 
     // Constants
     double SQRT3 = std::sqrt(3);
@@ -184,16 +191,131 @@ std::vector<DvD> TimeStep::solver_GL2(SpD &A,
 
     double c1 = .5 - SQRT3/6; double c2 = .5 + SQRT3/6;
     double b1 = .5; double b2 = .5;
+
+    SpD blockRow(n, 2*n);
+    SpD blockA(2*n, 2*n);
+    SpD blockCol(2*n, n);
+
+    // blockRow.block(0,0,n,n) = b1 * I_n;
+    // blockRow.block(0,n,n,n) = b2 * I_n;
+
+    // blockA.block(0, 0, n, n) = I_n - timeStep*a11*A;
+    // blockA.block(0, n, n, n) = -timeStep*a12*A;
+    // blockA.block(n, 0, n, n) = I_n - timeStep*a21*A;
+    // blockA.block(n, n, n, n) = -timeStep*a22*A;
+
+    // blockCol.block(0,0,n,n) = A;
+    // blockCol.block(n,0,n,n) = A;
+
+    std::cout<<"time2"<<std::endl;
+
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (I_n.coeff(j, i) != 0) {
+                blockRow.insert(j, i) = b1 * I_n.coeff(j, i);
+            }
+        }
+    }
+
+    // Top-right block: b2 * I_n
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (I_n.coeff(j, i) != 0) {
+                blockRow.insert(j, n + i) = b2 * I_n.coeff(j, i);
+            }
+        }
+    }
+
+    // Initialize blockA (2n x 2n)
+    blockA.resize(2 * n, 2 * n);
+    blockA.setZero(); // Set all entries to zero
+
+    // Populate blockA
+    // Top-left block: I_n - timeStep * a11 * A
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            double value = I_n.coeff(j, i) - timeStep * a11 * A.coeff(j, i);
+            if (value != 0) {
+                blockA.insert(j, i) = value;
+            }
+        }
+    }
+
+    // Top-right block: -timeStep * a12 * A
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            double value = -timeStep * a12 * A.coeff(j, i);
+            if (value != 0) {
+                blockA.insert(j, n + i) = value;
+            }
+        }
+    }
+
+    // Bottom-left block: I_n - timeStep * a21 * A
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            double value = -timeStep * a21 * A.coeff(j, i);
+            if (value != 0) {
+                blockA.insert(n + j, i) = value;
+            }
+        }
+    }
+
+    // Bottom-right block: -timeStep * a22 * A
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            double value = I_n.coeff(j, i) - timeStep * a22 * A.coeff(j, i);
+            if (value != 0) {
+                blockA.insert(n + j, n + i) = value;
+            }
+        }
+    }
+
+    // Initialize blockCol (2n x n)
+    blockCol.resize(2 * n, n);
+    blockCol.setZero(); // Set all entries to zero
+
+    // Populate blockCol
+    // Top block: A
+    for (int i = 0; i < n; ++i) {
+        for (int j = 0; j < n; ++j) {
+            if (A.coeff(j, i) != 0) {
+                blockCol.insert(j, i) = A.coeff(j, i);
+                blockCol.insert(n + j, i) = A.coeff(j, i);
+            }
+        }
+    }
+
+    std::cout<<"time3"<<std::endl;
+
+    // Finalize the matrices
+    blockRow.makeCompressed();
+    blockA.makeCompressed();
+    blockCol.makeCompressed();
+    
+    Eigen::SparseLU<SpD, Eigen::COLAMDOrdering<int>> LuSolverMM;    
+    LuSolverMM.analyzePattern(blockA);
+    LuSolverMM.factorize(blockA);
+
+    SpD blockA_Inv = LuSolverMM.solve(I_2n);
+    std::cout<<"time4"<<std::endl;
+
+    SpD fPropOp = I_n + timeStep * blockRow * blockA_Inv * blockCol;
+
+    std::cout<<"time5"<<std::endl;
+
+    // std::cout<<"fPropOp: "<<fPropOp<<std::endl;
+    // std::cout<<"blockRow: "<<blockRow<<std::endl;
+    // std::cout<<"blockA: "<<blockA<<std::endl;
+    // std::cout<<"blockA_Inv: "<<blockA_Inv<<std::endl;
+    // std::cout<<"blockCol: "<<blockCol<<std::endl;
     
     for (int i=1; i<numTimeSteps; i++) {
-        // rhs = A * prevState;
-    
-
-        x = prevState + (timeStep / 6) * (k1 + 2*k2 + 2*k3 + k4);
+        x = fPropOp * prevState;
         prevState = x;
         out.push_back(columnSpace * x);
     }
-
+    std::cout<<"time6"<<std::endl;
     return out;
 }
 
@@ -344,6 +466,7 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
 
     SpD A = LuSolverMM.solve(dummyId) * K11;
 
+    // std::cout<<"A: "<<A<<std::endl;
 
     // std::cout<<"inverse"<<std::endl<<combinedMatsInv<<std::endl;
 

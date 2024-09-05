@@ -6,34 +6,6 @@
 
 using namespace QTM;
 
-// void exportToJson(QuadTreeMesh mesh, std::ostream& out) {
-//     std::vector<std::shared_ptr<Cell>> allLeaves;
-//     for (auto cell : mesh.topCells) {
-//         auto leaves = cell->traverse();
-//         allLeaves.insert(allLeaves.end(), leaves.begin(), leaves.end());
-//     }
-//     out << "{";
-//     out << "\"children\": [\n";
-
-//     out << "{";
-//     out << "\"x\": " << allLeaves[0]->center[0] << ", ";
-//     out << "\"y\": " << allLeaves[0]->center[1] << ", ";
-//     out << "\"width\": " << 2*allLeaves[0]->width << ", ";
-//     out << "\"level\": " << allLeaves[0]->level << ", ";
-//     out << "\"CID\": " << allLeaves[0]->CID << "}\n ";
-
-//     for (int i=1; i<allLeaves.size(); i++) {
-//         auto leaf = allLeaves[i];
-//         out <<",{";
-//         out << "\"x\": " << leaf->center[0] << ", ";
-//         out << "\"y\": " << leaf->center[1] << ", ";
-//         out << "\"width\": " << 2*leaf->width << ", ";
-//         out << "\"level\": " << leaf->level << ", ";
-//         out << "\"CID\": " << leaf->CID << "}\n ";
-//     }
-//     out << "]}";
-// }
-
 int main(int argc, char* argv[]) {
     int nx;
     int ny;
@@ -42,12 +14,7 @@ int main(int argc, char* argv[]) {
     double Ly;
 
     std::cout<<argc<<"\n-------------\n";
-
-    // for (int i=0; i<argc; i++) {
-    //     std::cout<<argv[i]<<std::endl;
-    // }
-
-
+    
     nx = std::stoi(argv[2]); ny = std::stoi(argv[3]); deg = std::stoi(argv[1]);
     Lx = std::stod(argv[4]); Ly = std::stod(argv[5]);
 

@@ -5,12 +5,12 @@ from matplotlib.animation import FuncAnimation
 import subprocess
 
 # discretization parameters
-deg = 2
-div = 100
+deg = 4
+div = 50
 Lx = 2
 
-cfl = 1 / ((deg + 1)**2) / 4
-# cfl = 1 / (2 * deg + 1) / 4
+# cfl = 1 / ((deg + 1)**2) / 4
+cfl = 1 / (2 * deg + 1) / 4
 
 print(cfl)
 
@@ -67,11 +67,11 @@ num_frames = Z.shape[0]
 stepsize = 1000/num_frames
 ani = FuncAnimation(fig, update, frames=num_frames, interval=stepsize/1, blit=True)
 
-fig2, ax2 = plt.subplots()
-ax2.axhline(1)
-ax2.axhline(-1)
-ax2.set_ylim([-1.5,1.5])
-ax2.plot(x, Z[0,:])
+# fig2, ax2 = plt.subplots()
+# ax2.axhline(1)
+# ax2.axhline(-1)
+# ax2.set_ylim([-1.5,1.5])
+# ax2.plot(x, Z[0,:])
 
 # Show the animation
 plt.show()
