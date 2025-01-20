@@ -1,4 +1,4 @@
-#include "..\include\MatrixAssembly.hpp"
+#include "../include/MatrixAssembly.hpp"
 
 SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k, 
                 std::vector<bool> isDirichletBC,

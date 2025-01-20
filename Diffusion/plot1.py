@@ -30,7 +30,7 @@ dirichletBC = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 neumannBC = ["0", "0", "0", "0"]
 
 exeSelect = 2
-toRun = ".\main1.exe"
+toRun = "./diffDG.app"
 
 dirichletBC_trimmed = [dirichletBC[i] for i in range(numBoundaries) if ess[i] == "1"]
 neumannBC_trimmed = [neumannBC[i] for i in range(numBoundaries) if nat[i] == "1"]

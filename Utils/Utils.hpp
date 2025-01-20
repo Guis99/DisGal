@@ -1,5 +1,3 @@
-#define PI 3.1415926535897932384
-
 #include <vector>
 #include <array>
 #include <iostream>
@@ -7,8 +5,11 @@
 #include <cmath>
 #include <string>
 
+#define PI 3.1415926535897932384
+
 #ifndef UTILS
 #define UTILS
+ 
  
 namespace Utils {
     std::vector<double> evalLagrangeInterp(int k, std::vector<double> evalPoints, std::vector<double> &gaussPoints);

@@ -1,5 +1,5 @@
-#include "..\include\MatrixAssembly.hpp"
-#include "..\..\Dependencies\Eigen\SVD"
+#include "../include/MatrixAssembly.hpp"
+#include "../../Dependencies/Eigen/SVD"
 
 DD PMA::GenerateQuadWeights(std::vector<double> &gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes) {
     // Generate quadrature weight matrices
@@ -627,7 +627,7 @@ DvD PMA::ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& c
 
     // Eliminate boundary rows and boundary columns
     SpD A11 = columnSpaceT * StiffnessMatrix * columnSpace;
-    std::cout<<"Stokes stiffness matrix: "<<std::endl<<A11<<std::endl;
+    DEBUG_PRINT("Stokes stiffness matrix: ", A11);
     // Eliminate boundary rows and free columns
     SpD A12 = columnSpaceT * StiffnessMatrix * nullSpace;
     // Eliminate boundary rows

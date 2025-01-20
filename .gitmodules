@@ -1,3 +1,6 @@
-[submodule "qtm"]
-	path = qtm
+[submodule "Dependencies/QTM"]
+	path = Dependencies/QTM
 	url = https://github.com/Guis99/QTM
+[submodule "Dependencies/MathParser"]
+	path = Dependencies/MathParser
+	url = https://github.com/Guis99/MathParser

@@ -1,5 +1,5 @@
 #include "Utils.hpp"
-#include "..\MathParser\MathParser.hpp"
+#include "../Dependencies/MathParser/MathParser.hpp"
 
 std::vector<double> Utils::genGaussPoints(int degree) {
     std::vector<double> gaussPoints;
@@ -143,7 +143,7 @@ std::vector<double> Utils::ReshuffleNodeVals(std::vector<int> RmOrder, std::vect
 
 std::vector<double> Utils::EvalSymbolicBC(double* startpoint, int allocSize, std::string prompt) {
 
-    MathParser::QuickArray x;
+    MathParser::QA x;
     x.reserve(allocSize);
 
     for (int i=0; i<allocSize; i++) {
@@ -174,7 +174,7 @@ std::vector<double> Utils::EvalSymbolicBC(double* startpoint, int allocSize, std
 
 std::vector<double> Utils::EvalSymbolicBC1D(double* startpoint, int allocSize, std::string evalString) {
 
-    MathParser::QuickArray x;
+    MathParser::QA x;
     x.reserve(allocSize);
 
     for (int i=0; i<allocSize; i++) {
@@ -201,8 +201,8 @@ std::vector<double> Utils::EvalSymbolicBC1D(double* startpoint, int allocSize, s
 }
 
 std::vector<double> Utils::EvalSymbolicBC(std::array<double,2>* startpoint, int allocSize, std::string evalString) {
-    MathParser::QuickArray x;
-    MathParser::QuickArray y;
+    MathParser::QA x;
+    MathParser::QA y;
 
     x.reserve(allocSize); y.reserve(allocSize);
 
