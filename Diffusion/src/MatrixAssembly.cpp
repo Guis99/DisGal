@@ -1,5 +1,5 @@
-#include "..\include\MatrixAssembly.hpp"
-#include "..\..\Dependencies\Eigen\SVD"
+#include "../include/MatrixAssembly.hpp"
+#include "../../Dependencies/Eigen/SVD"
 
 DD PMA::GenerateQuadWeights(std::vector<double> &gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes) {
     // Generate quadrature weight matrices

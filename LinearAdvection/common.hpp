@@ -1,6 +1,6 @@
-#include "..\Dependencies\Utils\Utils.hpp"
-#include "..\Dependencies\Eigen\Core"
-#include "..\Dependencies\Eigen\Sparse"
+#include "..\Dependencies/Utils/Utils.hpp"
+#include "..\Dependencies/Eigen/Core"
+#include "..\Dependencies/Eigen/Sparse"
 
 #include <iostream>
 #include <fstream>

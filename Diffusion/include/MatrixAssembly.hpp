@@ -1,8 +1,8 @@
-#include "..\..\qtm\include\QTM.hpp"
-#include "..\..\Dependencies\Eigen\Core"
-#include "..\..\Dependencies\Eigen\Sparse"
-#include "..\..\Dependencies\unsupported\Eigen\KroneckerProduct"
-#include "..\..\Dependencies\Utils\Utils.hpp"
+#include "../../Dependencies/QTM/include/QTM.hpp"
+#include "../../Dependencies/Eigen/Core"
+#include "../../Dependencies/Eigen/Sparse"
+#include "../../Dependencies/unsupported/Eigen/KroneckerProduct"
+#include "../../Dependencies/Utils/Utils.hpp"
 // #include "..\..\Meshing\Meshing.hpp"
 
 #ifndef MatrixAssembly_diff
