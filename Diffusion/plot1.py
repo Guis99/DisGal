@@ -7,29 +7,34 @@ import matplotlib.patches as patches
 import subprocess
 
 # discretization parameters
-deg = 2
-div = 10
+deg = 5
+div = 8
 Lx = 1
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
 
-penalty = 500
+penalty = 50
 
 force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
-force = "0"
+# force = "0"
 
 numBoundaries = 4
 
+btm = {"1":"0", "0":"1"} # if bc is not one, it has to be the other
+
+
 ess = ["1","1","1","1"]
-nat = ["0","0","0","0"]
+nat = [btm[bc] for bc in ess]
 
 dirichletBC = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
-neumannBC = []
+neumannBC = ["0", "0", "0", "0"]
 
 exeSelect = 2
 toRun = ".\main1.exe"
 
-subprocess.run([toRun, *meshInfo, str(penalty), force, str(numBoundaries), *ess, *nat, *dirichletBC, *neumannBC]) 
+dirichletBC_trimmed = [dirichletBC[i] for i in range(numBoundaries) if ess[i] == "1"]
+neumannBC_trimmed = [neumannBC[i] for i in range(numBoundaries) if nat[i] == "1"]
+subprocess.run([toRun, *meshInfo, str(penalty), force, str(numBoundaries), *ess, *nat, *dirichletBC_trimmed, *neumannBC_trimmed]) 
 # subprocess.run([toRun, "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "50"])  
 
 def draw_cell_nr(cell, ax):

@@ -91,7 +91,7 @@ int main(int argc, char* argv[]) {
     double c = 1;
     double k = 1;
 
-    DD z = PoissonSolve(mesh, c, k, source, bcs, penalty);
+    DD z = PMA::PoissonSolve(mesh, c, k, source, bcs, penalty);
 
     std::vector<std::array<double,2>> allNodePos = mesh.nodePositions;
 

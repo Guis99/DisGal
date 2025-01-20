@@ -109,12 +109,6 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
                 DD fluxMatrixXT = (DD)(fluxMatrixX.transpose());
                 DD fluxMatrixYT = (DD)(fluxMatrixY.transpose());
 
-                // std::cout<<"miscellaneous matrix assembly check"<<std::endl;
-                // std::cout<<jumpMatrix.rows()<<", "<<jumpMatrix.cols()<<std::endl;
-                // std::cout<<fluxMatrixX.rows()<<", "<<fluxMatrixX.cols()<<std::endl;
-                // std::cout<<fluxMatrixY.rows()<<", "<<fluxMatrixY.cols()<<std::endl;
-                // std::cout<<quadWeights1D.rows()<<std::endl;
-
                 DD localElemMat = penalty*jumpMatrix * jac*quadWeights1D * jumpMatrixT;
                 DD localElemMatGrad = (DD)(jumpMatrix * quadWeights1D * fluxMatrixX + 
                                         jumpMatrix * quadWeights1D * fluxMatrixY); // TODO: check that matrix dimensions are good
@@ -152,10 +146,6 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                         double alpha, 
                         PMA::quadUtils& package) {
     // do integral (v - n dot grad v) * u_D   over dirichlet boundary
-    std::cout<<"dbc bool:"<<std::endl;
-    for (bool elm : isDirichletBC) {
-        std::cout<<elm<<std::endl;
-    }
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
@@ -196,7 +186,8 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
     double normalY[4] = {1,0,-1,0};
     int dbcIdx = 0;
 
-    DvD out(nNodes);
+    std::vector<Eigen::Triplet<double>> tripletList;
+    tripletList.reserve(nElements * numElemNodes);
 
     for (int i=0; i<isDirichletBC.size(); i++) {
         if (isDirichletBC[i]) {
@@ -204,12 +195,9 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
             dirichletCells = mesh.boundaryCells[i];
             std::vector<int> dirichletCellIDs; 
             dirichletCellIDs.reserve(dirichletCells.size());
-            std::cout<<"dbc #"<<dbcIdx<<": "<<std::endl;
             for (const auto& cell : dirichletCells) {
-                std::cout<<cell->CID<<std::endl;
                 dirichletCellIDs.push_back(cell->CID);
             }
-            std::cout<<"---------------"<<std::endl;
 
             std::vector<int> localBoundaryNodes = localNodes[dir];
 
@@ -217,9 +205,7 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
 
             auto nodesPos = mesh.GetNodePos(boundaryCellPos); // cell IDs won't work, rather need node idxs
             auto startpoint = nodesPos.data(); auto allocSize = nodesPos.size();
-            auto fEval = Utils::EvalSymbolicBC(startpoint, allocSize, dbcs[dbcIdx++]);
-            Utils::printVec(fEval);
-            
+            auto fEval = Utils::EvalSymbolicBC(startpoint, allocSize, dbcs[dbcIdx++]);            
 
             int cellIterIdx = 0;
             auto dirichletIdx = fEval.begin();
@@ -250,29 +236,12 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                 DD topGradXT = topGradX.transpose();
                 DD topGradYT = topGradY.transpose();
 
-                std::cout<<"tj: "<<topJump.rows()<<", "<<topJump.cols()<<std::endl;
-                std::cout<<"tgx: "<<topGradXT.rows()<<", "<<topGradXT.cols()<<std::endl;
-                std::cout<<"tgy: "<<topGradXT.rows()<<", "<<topGradYT.cols()<<std::endl;
-
-                // calculate jump matrix
-                DD jumpMatrix(elemNodes.size(), numNodes);
-
-                std::cout<<"jm: "<<jumpMatrix.rows()<<", "<<jumpMatrix.cols()<<std::endl;
-                jumpMatrix << topJump;
-
                 DD fluxMatrixX(elemNodes.size(), numNodes);
                 DD fluxMatrixY(elemNodes.size(), numNodes);
 
                 // place partial derivatives in combined mat
                 fluxMatrixX << topGradXT;
                 fluxMatrixY << topGradYT;
-
-                std::cout<<"miscellaneous matrix assembly check"<<std::endl;
-                std::cout<<jumpMatrix.rows()<<", "<<jumpMatrix.cols()<<std::endl;
-                std::cout<<fluxMatrixX.rows()<<", "<<fluxMatrixX.cols()<<std::endl;
-                std::cout<<fluxMatrixY.rows()<<", "<<fluxMatrixY.cols()<<std::endl;
-                std::cout<<quadWeights1D.rows()<<", "<<quadWeights1D.cols()<<std::endl;
-                std::cout<<sourceVector.rows()<<", "<<sourceVector.cols()<<std::endl;
 
                 // assemble local matrix 
                 DvD localElemMat = penalty*topJump * jac*quadWeights1D * sourceVector;
@@ -282,13 +251,18 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                 localElemMat -= localElemMatGrad;
                 
                 for (int i=0; i<numElemNodes; i++) {
-                    out[nodes[0]+i] += localElemMat[i];
+                    tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
+                    // out[nodes[0]+i] += localElemMat[i];
                 }
             }
         } else {
             continue;
         }
     }
+    SpD mat(nNodes,1);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    DvD out = (DvD)mat;
     return out;
 } 
 
@@ -323,8 +297,6 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
     std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(nElements * numElemNodes);
 
-    DvD out(nNodes);
-
     std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::E),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
@@ -348,9 +320,13 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
                 neumannCellIDs.push_back(cell->CID);
             }
 
-            auto nodesPos = mesh.GetNodePos(neumannCellIDs);
+            std::vector<int> localBoundaryNodes = localNodes[dir];
+
+            std::vector<int> boundaryCellPos = Utils::GetBoundaryNodes(localBoundaryNodes, neumannCellIDs, numNodes);
+            auto nodesPos = mesh.GetNodePos(boundaryCellPos);
             auto startpoint = nodesPos.data(); auto allocSize = nodesPos.size();
             auto fEval = Utils::EvalSymbolicBC(startpoint, allocSize, nbcs[nbcIdx++]);
+            auto neumannIdx = fEval.begin();
             for (const auto& elm : neumannCells) {
                 elemNodes = mesh.GetGlobalElemNodes(elm->CID);
                 elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
@@ -358,9 +334,10 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
                 // calculate local matrix
                 auto nodes = elm->nodes;
                 std::vector<double> collectSourceVals; collectSourceVals.reserve(numElemNodes);
-                collectSourceVals.insert(collectSourceVals.begin(), fEval.begin()+nodes[0], fEval.begin()+nodes[1]+1);
+                collectSourceVals.insert(collectSourceVals.begin(), neumannIdx, neumannIdx+numNodes);
+                neumannIdx += numNodes;
 
-                Eigen::Map<DvD> sourceVector(collectSourceVals.data(), numElemNodes, 1);
+                Eigen::Map<DvD> sourceVector(collectSourceVals.data(), numNodes, 1);
 
                 DD topJump = nodalVals(elemLocals, localNodes[dir]);
                 localElemMat = topJump * jac*quadWeights1D * sourceVector;
@@ -368,30 +345,34 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
                 
                 // Generate i,j,v triplets
                 for (int i=0; i<numElemNodes; i++) {
-                    // tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
-                    out[nodes[0]+i] += localElemMat[i];
+                    tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
+                    // out[nodes[0]+i] += localElemMat[i];
                 }
             }
         } else {
             continue;
         }
     }
+    SpD mat(nNodes,1);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    DvD out = (DvD)mat;
     return out;
 }
 
 DvD PMA::ComputeSolutionStationaryLinearNoElim(SpD& A, DvD& b) {
     using namespace Eigen;
 
-    SparseLU<SpD,COLAMDOrdering<int>> solver;
-    solver.analyzePattern(A);
-    PMA::FindRank(A);
-    // PMA::FindConditionNumber(A);
-    solver.factorize(A);
-    DvD x = solver.solve(b); 
+    // SparseLU<SpD,COLAMDOrdering<int>> solver;
+    // solver.analyzePattern(A);
+    // PMA::FindRank(A);
+    // // PMA::FindConditionNumber(A);
+    // solver.factorize(A);
+    // DvD x = solver.solve(b); 
 
-    // ConjugateGradient<SpD, Lower|Upper> cg;
-    // cg.compute(A11);
-    // DvD x = cg.solve(F11 - A12 * boundaryVals);
+    ConjugateGradient<SpD, Lower|Upper> cg;
+    cg.compute(A);
+    DvD x = cg.solve(b);
 
     return x;
 }
@@ -434,13 +415,12 @@ DvD PMA::dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
 
     std::cout<<"Assembling RHS vector"<<std::endl;
     DvD FMatrix = PMA::AssembleFVec(inputMesh, 1.0, source);
-    std::cout<<"Assembling boundary condition vectors"<<std::endl;
 
+    std::cout<<"Assembling dirichlet boundary condition vector"<<std::endl;
     DvD dirichletBound = PMA::IntegrateDirichlet(inputMesh, isDirichletBC, dbcs, penaltyParam, package);
-    DvD neumannBound = PMA::IntegrateNeumann(inputMesh, isNeumannBC, nbcs, package);
 
-    std::cout<<"BOUND: "<< allBoundaryNodes.size()<<" FREE: "<< freeNodes.size()<<" ALL: "<<inputMesh.nNodes()<<std::endl;
-    std::cout<<FMatrix.rows()<<", "<<dirichletBound.rows()<<", "<<neumannBound.rows()<<std::endl;
+    std::cout<<"Assembling neumann boundary condition vector"<<std::endl;
+    DvD neumannBound = PMA::IntegrateNeumann(inputMesh, isNeumannBC, nbcs, package);
 
     DvD b = FMatrix + dirichletBound + neumannBound;
 

@@ -81,7 +81,7 @@ int main(int argc, char* argv[]) {
     double c = 1;
     double k = 1;
 
-    DD z = PMA::dgPoissonSolve(mesh, k, source, essentialBC, naturalBC, dbcs, nbcs, penalty, 0);
+    DvD z = PMA::dgPoissonSolve(mesh, k, source, essentialBC, naturalBC, dbcs, nbcs, penalty, 0);
 
     std::vector<std::array<double,2>> allNodePos = mesh.nodePositions;
 

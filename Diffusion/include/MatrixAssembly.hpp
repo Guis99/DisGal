@@ -95,5 +95,15 @@ DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 std::vector<std::string> nbcs,
                 double penaltyParam,
                 double dirichletPenalty);
+
+double dgComputeResidual(QTM::QuadTreeMesh& inputMesh,
+                double k,
+                std::string source,
+                std::vector<bool> isDirichletBC,
+                std::vector<bool> isNeumannBC,
+                std::vector<std::string> dbcs,
+                std::vector<std::string> nbcs,
+                double penaltyParam,
+                double dirichletPenalty);
 }
 #endif

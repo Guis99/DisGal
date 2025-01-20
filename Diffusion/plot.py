@@ -7,15 +7,15 @@ import matplotlib.patches as patches
 import subprocess
 
 div = 3
-deg = 4
-force = "sin(pi*x/1)*sin(pi*y/1)"
-zero = "0"
+deg = 9
+force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
+# force = "0"
 Lx = 1
 
 bcs = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 
 exeSelect = 1
-toRun = ".\main.exe" if exeSelect == 1 else ".\mainSplit.exe"
+toRun = "main.exe" if exeSelect == 1 else "mainSplit.exe"
 
 div2 = 4
 subprocess.run([toRun, str(deg), str(div), str(div), str(Lx), str(Lx), force, *bcs, "90"]) 
