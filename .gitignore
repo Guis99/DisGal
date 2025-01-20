@@ -367,7 +367,6 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 *exe
-/Dependencies/**
 *txt
 
 *.json
