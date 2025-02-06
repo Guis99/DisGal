@@ -1,10 +1,25 @@
-#include "..\Dependencies\Utils\Utils.hpp"
-#include "..\Dependencies\Eigen\Core"
-#include "..\Dependencies\Eigen\Sparse"
+#include "../Utils/Utils.hpp"
+#include "../Dependencies/Eigen/Core"
+#include "../Dependencies/Eigen/Sparse"
 
 #include <iostream>
 #include <fstream>
 #include <functional>
+
+#ifndef DEBUGPRINT
+// Helper function to handle variadic arguments
+template<typename... Args>
+void debug_print(Args&&... args) {
+    (std::cout << ... << args) << std::endl; // Fold expression to print all arguments
+}
+
+// Define the DEBUG_PRINT macro
+#ifdef VERBOSE
+#define DEBUG_PRINT(...) debug_print(__VA_ARGS__)
+#else
+#define DEBUG_PRINT(...)
+#endif
+#endif
 
 typedef Eigen::SparseMatrix<double> SpD;
 // Dynamically-sized matrix of doubles
@@ -43,39 +58,36 @@ void GetExtensionMatrices(BasicMesh1D &inputMesh,
                                         SpD &nullSpace,
                                         SpD &columnSpace);
 
+DvD getICVec(const BasicMesh1D& mesh, int nNodes, char* baseline, double cutoff, std::string IC);
+
 namespace TimeStep {
     
     std::vector<DvD> solver_RK4(SpD &A, 
                                 SpD &columnSpace, SpD &nullSpace, 
-                                DvD &boundaryVals, 
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps);
 
     std::vector<DvD> solver_RK4_NonLinear_Burger(SpD &A, 
                                 SpD &columnSpace, SpD &nullSpace, 
-                                DvD &boundaryVals, 
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps);
 
     std::vector<DvD> solver_GL1(SpD &A, 
-                                SpD &columnSpace, SpD &nullSpace, 
-                                DvD &boundaryVals, 
+                                SpD &columnSpace, SpD &nullSpace,
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps);
 
     std::vector<DvD> solver_GL2(SpD &A, 
-                                SpD &columnSpace, SpD &nullSpace, 
-                                DvD &boundaryVals, 
+                                SpD &columnSpace, SpD &nullSpace,
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps);
 
     std::vector<DvD> solver_GL2_nonlinear(SpD &A, 
                                 SpD &columnSpace, SpD &nullSpace, 
-                                DvD &boundaryVals, 
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps);
@@ -85,7 +97,7 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
 
 std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix, 
                                 SpD &MassMatrix, SpD &columnSpace, 
-                                SpD &nullSpace, DvD &boundaryVals, 
+                                SpD &nullSpace, 
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps,
@@ -93,8 +105,7 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
 
 std::vector<DvD> ComputeTransientSolutionBurger(SpD &StiffnessMatrix, 
                                 SpD &MassMatrix, SpD SIPMatrix,
-                                SpD &columnSpace, 
-                                SpD &nullSpace, DvD &boundaryVals, 
+                                SpD &columnSpace,
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps,

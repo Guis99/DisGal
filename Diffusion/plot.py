@@ -15,7 +15,7 @@ Lx = 1
 bcs = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 
 exeSelect = 1
-toRun = "./diffDG" if exeSelect == 1 else "mainSplit.exe"
+toRun = "./build/diffDG" if exeSelect == 1 else "mainSplit.exe"
 
 div2 = 4
 subprocess.run([toRun, str(deg), str(div), str(div), str(Lx), str(Lx), force, *bcs, "90"]) 

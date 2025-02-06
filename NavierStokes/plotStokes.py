@@ -34,7 +34,7 @@ p = []
 natBC = []
 
 exeSelect = 2
-toRun = ".\mainStokes.exe"
+toRun = "./build/stokesDG"
 
 subprocess.run([toRun, *meshInfo, str(penalty), *forces, str(numBoundaries), *velDir, *pressDir, *nat, *u, *v, *p, *natBC]) 
 

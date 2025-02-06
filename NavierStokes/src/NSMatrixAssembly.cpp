@@ -1,4 +1,4 @@
-#include "..\include\NSMatrixAssembly.hpp"
+#include "../include/NSMatrixAssembly.hpp"
 
 SpD NSMA::PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // Oriented as V-P.

@@ -1,13 +1,12 @@
 #include "common.hpp"
 
 std::vector<DvD> TimeStep::solver_RK4_NonLinear_Burger(SpD &A, 
-                            SpD &columnSpace, SpD &nullSpace, 
-                            DvD &boundaryVals, 
+                            SpD &columnSpace, SpD &nullSpace,
                             DvD &initialCondition,
                             double timeStep,
                             int numTimeSteps) {
     std::vector<DvD> out; out.reserve(numTimeSteps);
-    out.push_back(columnSpace * initialCondition);
+    out.push_back(initialCondition);
     DvD prevState = initialCondition;
     DvD x;
     DvD k1; DvD k2; DvD k3; DvD k4;
@@ -36,24 +35,24 @@ std::vector<DvD> TimeStep::solver_RK4_NonLinear_Burger(SpD &A,
         DvD diff = x - prevState;
         // std::cout<<"diff at iter "<<i<<": "<< diff.norm()<<std::endl;
         prevState = x;
-        out.push_back(columnSpace * x);
+        out.push_back(x);
     }
 
     return out;
 }
 
-std::vector<DvD> ComputeTransientSolutionBurger(SpD &StiffnessMatrix, 
-                                SpD &MassMatrix, SpD SIPMatrix,
+std::vector<DvD> ComputeTransientSolutionBurger(SpD &K11, 
+                                SpD &M11, SpD SIP11,
                                 SpD &columnSpace, 
-                                SpD &nullSpace, DvD &boundaryVals, 
+                                SpD &nullSpace, 
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps,
                                 int integrator) {
     // Eliminate boundary rows and columns
-    SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
-    SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
-    SpD SIP11 = columnSpace.transpose() * SIPMatrix * columnSpace;
+    // SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
+    // SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
+    // SpD SIP11 = columnSpace.transpose() * SIPMatrix * columnSpace;
 
     int system_size = K11.rows();
     SpD dummyId(system_size, system_size); 
@@ -77,7 +76,7 @@ std::vector<DvD> ComputeTransientSolutionBurger(SpD &StiffnessMatrix,
     // std::cout<<"inverse"<<std::endl<<combinedMatsInv<<std::endl;
 
     std::vector<DvD> out;
-    out.push_back(columnSpace * initialCondition);
+    out.push_back(initialCondition);
     DvD prevState = initialCondition;
     DvD x;
     SpD K1 = .5 * M11_Inv * (K11 - M11);
@@ -95,13 +94,13 @@ std::vector<DvD> ComputeTransientSolutionBurger(SpD &StiffnessMatrix,
             return out;
             break;
         case 2: // RK4
-            return TimeStep::solver_RK4_NonLinear_Burger(K1, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
+            return TimeStep::solver_RK4_NonLinear_Burger(K1, columnSpace, nullSpace, initialCondition, timeStep, numTimeSteps);
             break;
         case 3: // GL1
             return out;
             break;
         case 4: // GL2
-            return TimeStep::solver_GL2(K1, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
+            return TimeStep::solver_GL2(K1, columnSpace, nullSpace, initialCondition, timeStep, numTimeSteps);
             break;
     }
     return out;
@@ -135,6 +134,9 @@ int main(int argc, char* argv[]) {
 
     int systemForm = std::stoi(argv[8]); // 0 = fully non-linear state vector, 1 = pseudo-linear matrix form
 
+    char* baseline = argv[9];
+    double cutoff = std::stod(argv[10]);
+
     std::cout<<"Order (polynomial degree): "<<deg<<"\nnx: "<<numElem<<std::endl;
     std::cout<<"-------------------------"<<std::endl;
     std::cout<<"Initial condition: "<<IC<<std::endl;
@@ -148,24 +150,9 @@ int main(int argc, char* argv[]) {
     BasicMesh1D mesh = CreateMesh(deg, numElem, spacing);
     auto nodes = mesh.nodes;
     int nNodes = nodes.size();
-
-    int stopIdx = 0;
-    std::vector<double> x;
-
-    while (nodes[stopIdx].position <= .5) {
-        x.push_back(nodes[stopIdx++].position); 
-    }
     
-    std::vector<double> ICVec = Utils::EvalSymbolicBC1D(x.data(), stopIdx, IC);
-
-    ICVec.reserve(nNodes);
-
-    for (stopIdx; stopIdx<nNodes; stopIdx++) {
-        ICVec.push_back(0);
-    }
-
-    Eigen::Map<DvD> InitialCondition(ICVec.data(), nNodes, 1);
-    DvD initialCondition = (DvD)InitialCondition;
+    DvD initialCondition = getICVec(mesh, nNodes, baseline, cutoff, IC);
+    DEBUG_PRINT(initialCondition);
 
     std::vector<int> boundaryNodes = {};
     std::vector<int> freeNodes; freeNodes.reserve(nNodes);
@@ -192,12 +179,12 @@ int main(int argc, char* argv[]) {
     std::vector<DvD> solns = ComputeTransientSolutionBurger(StiffnessMatrix, MassMatrix, 
                                                         MassMatrix,
                                                         columnSpace, 
-                                                        nullSpace, boundaryVals, 
+                                                        nullSpace, 
                                                         initialCondition, timeStep, numTimeSteps,
                                                         integratorType);
 
     
-    
+    std::cout<<"Success!"<<std::endl;
     std::vector<double> xPositions;
     xPositions.reserve(nNodes);
     for (int i=0; i<nNodes; i++) {

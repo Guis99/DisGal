@@ -1,0 +1,1 @@
+clang++ -std=c++17 mainStokes.cpp src/NSMatrixAssembly.cpp ../Diffusion/src/MatrixAssembly.cpp ../Utils/Utils.cpp ../Dependencies/MathParser/src/EvalGenCode.cpp ../Dependencies/MathParser/src/LexInput.cpp ../Dependencies/MathParser/src/ParseTokens.cpp ../Dependencies/QTM/src/QTM.cpp ../Dependencies/QTM/src/Cell.cpp -o build/stokesDG

@@ -160,6 +160,7 @@ cython_debug/
 #.idea/
 ### VisualStudioCode ###
 .vscode/**
+./.vscode
 
 # Local History for Visual Studio Code
 .history/
@@ -371,3 +372,4 @@ FodyWeavers.xsd
 
 *.json
 
+!CMakeLists.txt

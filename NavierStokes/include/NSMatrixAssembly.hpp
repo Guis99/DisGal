@@ -1,4 +1,4 @@
-#include "..\..\Diffusion\include\MatrixAssembly.hpp"
+#include "../../Diffusion/include/MatrixAssembly.hpp"
 
 #ifndef MatrixAssembly_NS
 #define MatrixAssembly_NS

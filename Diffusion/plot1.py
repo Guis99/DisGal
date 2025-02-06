@@ -26,11 +26,11 @@ btm = {"1":"0", "0":"1"} # if bc is not one, it has to be the other
 ess = ["1","1","1","1"]
 nat = [btm[bc] for bc in ess]
 
-dirichletBC = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
+dirichletBC = ["sin(5*pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 neumannBC = ["0", "0", "0", "0"]
 
 exeSelect = 2
-toRun = "./diffDG.app"
+toRun = "./build/diffDG"
 
 dirichletBC_trimmed = [dirichletBC[i] for i in range(numBoundaries) if ess[i] == "1"]
 neumannBC_trimmed = [neumannBC[i] for i in range(numBoundaries) if nat[i] == "1"]
