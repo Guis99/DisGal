@@ -6,13 +6,13 @@ project(LinearAdvection)
 include(CMakePrintHelpers)
 
 # set(CMAKE_C_COMPILER /usr/bin/clang)
-# set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+set(CMAKE_CXX_COMPILER /usr/bin/clang++)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Append compiler flags instead of overwriting
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DVERBOSE -std=c++17 -stdlib=libc++ -nostdinc++ -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk/usr/include/c++/v1")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-value -Wno-switch -O3 -DVERBOSE -std=c++17 -stdlib=libc++ -isystem /Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk/usr/include/c++/v1 -I/Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk/usr/include")
 
 # std=c++17 -stdlib=libc++ -I/Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk/usr/include/c++/v1
 
@@ -83,11 +83,21 @@ set(MAIN_OBJECT "${LINEAR_ADVECTION_BUILD_DIR}/Adv1D.o")
 
 cmake_print_variables(LINEAR_ADVECTION_BUILD_DIR)
 cmake_print_variables(MAIN_OBJECT)
+
+separate_arguments(PARSED_CXX_FLAGS UNIX_COMMAND "${CMAKE_CXX_FLAGS}")
+
 add_custom_command(
     OUTPUT ${MAIN_OBJECT}
-    COMMAND ${CMAKE_CXX_COMPILER} -std=c++17 -c ${LINEAR_ADVECTION_MAIN_SRC} -o ${MAIN_OBJECT} -O3 -DVERBOSE
+    COMMAND ${CMAKE_CXX_COMPILER} ${PARSED_CXX_FLAGS} -c ${LINEAR_ADVECTION_MAIN_SRC} -o ${MAIN_OBJECT}
     DEPENDS ${LINEAR_ADVECTION_MAIN_SRC}
 )
+
+# add_custom_command(
+#     OUTPUT ${MAIN_OBJECT}
+#     COMMAND ${CMAKE_CXX_COMPILER} -std=c++17 -c ${LINEAR_ADVECTION_MAIN_SRC} -o ${MAIN_OBJECT} -O3 -DVERBOSE
+#     DEPENDS ${LINEAR_ADVECTION_MAIN_SRC}
+# )
+
 
 # Final executable
 add_executable(Adv1D ${MAIN_OBJECT} $<TARGET_OBJECTS:common> $<TARGET_OBJECTS:mathparser> $<TARGET_OBJECTS:utils>)

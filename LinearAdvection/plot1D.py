@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 import subprocess
+import platform
 
 # discretization parameters
 deg = 4
@@ -33,7 +34,12 @@ initialCondition = "2*x - .5"
 initialCondition = "1"
 # initialCondition = "x"
 
-toRun = "./build/Adv1D" 
+osName = platform.system()
+if osName == "darwin" or osName.startswith("linux"):
+    toRun = "./build/Adv1D"
+elif osName == "windows":
+    toRun = "./build/Adv1D.exe"
+
 
 subprocess.run([toRun, *meshInfo, initialCondition, str(timeLength), str(timeSteps), 
                 str(integrators[integratorIdx]), str(baseline), str(cutoff)])

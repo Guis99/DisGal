@@ -635,15 +635,15 @@ DvD PMA::ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& c
 
     using namespace Eigen;
 
-    SparseLU<SpD,COLAMDOrdering<int>> solver;
-    solver.analyzePattern(A11);
-    FindRank(A11);
-    solver.factorize(A11);
-    DvD x = solver.solve(F11 - A12 * boundaryVals); 
+    // SparseLU<SpD,COLAMDOrdering<int>> solver;
+    // solver.analyzePattern(A11);
+    // FindRank(A11);
+    // solver.factorize(A11);
+    // DvD x = solver.solve(F11 - A12 * boundaryVals); 
 
-    // ConjugateGradient<SpD, Lower|Upper> cg;
-    // cg.compute(A11);
-    // DvD x = cg.solve(F11 - A12 * boundaryVals);
+    ConjugateGradient<SpD, Lower|Upper> cg;
+    cg.compute(A11);
+    DvD x = cg.solve(F11 - A12 * boundaryVals);
 
     x = columnSpace * x + nullSpace * boundaryVals;
     return x;

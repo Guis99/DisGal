@@ -5,6 +5,11 @@ import json
 import matplotlib.patches as patches
 
 import subprocess
+import sys
+
+sys.path.insert(0,'../Utils')
+import Utils
+toRun = Utils.getExecutableName("diffDG")
 
 # discretization parameters
 deg = 5
@@ -28,9 +33,6 @@ nat = [btm[bc] for bc in ess]
 
 dirichletBC = ["sin(5*pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 neumannBC = ["0", "0", "0", "0"]
-
-exeSelect = 2
-toRun = "./build/diffDG"
 
 dirichletBC_trimmed = [dirichletBC[i] for i in range(numBoundaries) if ess[i] == "1"]
 neumannBC_trimmed = [neumannBC[i] for i in range(numBoundaries) if nat[i] == "1"]

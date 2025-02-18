@@ -1,10 +1,11 @@
-# import numpy as np
-# import matplotlib.pyplot as plt
-# from scipy.interpolate import griddata
-# import json
-# import matplotlib.patches as patches
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
+import json
+import matplotlib.patches as patches
 
 import subprocess
+import platform
 
 div = 20
 deg = 4
@@ -15,7 +16,11 @@ Lx = 1
 bcs = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 
 exeSelect = 1
-toRun = "./build/diffDG" if exeSelect == 1 else "mainSplit.exe"
+
+if osName == "darwin" or osName.startswith("linux"):
+    toRun = "./build/diff"
+elif osName == "windows":
+    toRun = "./build/diff.exe"
 
 div2 = 4
 subprocess.run([toRun, str(deg), str(div), str(div), str(Lx), str(Lx), force, *bcs, "90"]) 
