@@ -12,8 +12,8 @@ import Utils
 toRun = Utils.getExecutableName("diffDG")
 
 # discretization parameters
-deg = 5
-div = 8
+deg = 60
+div = 1
 Lx = 1
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
@@ -51,49 +51,52 @@ def draw_cell_nr(cell, ax):
 
         ax.add_patch(rect)
 
+printflag = False
+
+if printflag:
 # Step 1: Load your data
-print("Loading results")
-data = np.loadtxt('outputdG.txt', delimiter=',')
-x = data[:, 0]
-y = data[:, 1]
-z = data[:, 2]
+    print("Loading results")
+    data = np.loadtxt('outputdG.txt', delimiter=',')
+    x = data[:, 0]
+    y = data[:, 1]
+    z = data[:, 2]
 
-# Step 2: Interpolate your data onto a regular grid
-# Create grid coordinates
-print("Interpolating data")
-xi = np.linspace(min(x), max(x), 100)
-yi = np.linspace(min(y), max(y), 100)
-xi, yi = np.meshgrid(xi, yi)
+    # Step 2: Interpolate your data onto a regular grid
+    # Create grid coordinates
+    print("Interpolating data")
+    xi = np.linspace(min(x), max(x), 100)
+    yi = np.linspace(min(y), max(y), 100)
+    xi, yi = np.meshgrid(xi, yi)
 
-# Interpolate z values on the grid
-zi = griddata((x, y), z, (xi, yi), method='cubic')
+    # Interpolate z values on the grid
+    zi = griddata((x, y), z, (xi, yi), method='cubic')
 
-print("Plotting data")
-# Step 3: Plot the contour
-fig,ax=plt.subplots()
-plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
-plt.colorbar()  # Show color scale
-# plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.title('Contour plot')
+    print("Plotting data")
+    # Step 3: Plot the contour
+    fig,ax=plt.subplots()
+    plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
+    plt.colorbar()  # Show color scale
+    # plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Contour plot')
 
-print("Plotting quadtree")
-with open("quadtreedG.json", 'r') as f:
-    quadtree = json.load(f)
+    print("Plotting quadtree")
+    with open("quadtreedG.json", 'r') as f:
+        quadtree = json.load(f)
 
-    draw_cell_nr(quadtree, ax)
-    plt.axis('equal')  # Ensures the plot is square in shape
-
-
-fig2 = plt.figure(figsize =(14, 9))
-ax2 = plt.axes(projection ='3d')
- 
-# Creating plot
-ax2.plot_surface(xi, yi, zi)
-ax2.set_xlabel('x')
+        draw_cell_nr(quadtree, ax)
+        plt.axis('equal')  # Ensures the plot is square in shape
 
 
-plt.show()
+    fig2 = plt.figure(figsize =(14, 9))
+    ax2 = plt.axes(projection ='3d')
+    
+    # Creating plot
+    ax2.plot_surface(xi, yi, zi)
+    ax2.set_xlabel('x')
+
+
+    plt.show()
 
 

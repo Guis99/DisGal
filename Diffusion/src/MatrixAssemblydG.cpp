@@ -18,10 +18,10 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
     DD combinedX = package.combinedX;
     DD combinedY = package.combinedY;
 
-    std::cout<<"--------package in boundary------------"<<std::endl;
-    std::cout<<combinedX.rows()<<", "<<combinedX.cols()<<std::endl;
-    std::cout<<combinedY.rows()<<", "<<combinedY.cols()<<std::endl;
-    std::cout<<"--------package in boundary------------"<<std::endl;
+    // std::cout<<"--------package in boundary------------"<<std::endl;
+    // std::cout<<combinedX.rows()<<", "<<combinedX.cols()<<std::endl;
+    // std::cout<<combinedY.rows()<<", "<<combinedY.cols()<<std::endl;
+    // std::cout<<"--------package in boundary------------"<<std::endl;
     
     std::array<DD, 4> splitCellVals = package.splitCellVals;
     std::array<DD, 4> splitCellGradsX = package.splitCellGradsX;
@@ -398,17 +398,49 @@ DvD PMA::dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
 
     PMA::quadUtils package = PMA::GenerateAssemblyPackage(inputMesh);
 
+    DEBUG_PRINT("Full size: ", nNodes);
+    DEBUG_PRINT("int size: ", sizeof(nNodes));
+
+    double nNodesD = (double)nNodes;
+    DEBUG_PRINT("double size: ", sizeof(nNodesD));
+
+    std::cout<<nNodesD<<std::endl;
+    auto fullSize = (nNodesD);
+    std::cout<<fullSize<<std::endl;
+
+    DEBUG_PRINT("Full size: ", fullSize);
+
     std::cout<<"Assembling stiffness matrix"<<std::endl;
     SpD KMatrix = PMA::StiffnessMatrix(inputMesh, k);
+    DEBUG_PRINT("KNZ: ",KMatrix.nonZeros()/fullSize);
     std::cout<<"Assembling penalty matrix"<<std::endl;
     SpD PMatrix = PMA::PenaltyMatrix(inputMesh, k, penaltyParam, package);
+    DEBUG_PRINT("PNZ: ",PMatrix.nonZeros()/fullSize);
     std::cout<<"Assembling flux matrix"<<std::endl;
     SpD SMatrix = PMA::FluxMatrix(inputMesh, k, package);
+    DEBUG_PRINT("SNZ: ",SMatrix.nonZeros()/fullSize);
     SpD SMatrixT = (SpD)(SMatrix.transpose());
+    DEBUG_PRINT("STNZ: ",SMatrixT.nonZeros()/fullSize);
     std::cout<<"Assembling flux matrix"<<std::endl;
     SpD Miscellaneous = PMA::BoundaryMatrix(inputMesh, k, isDirichletBC, dbcs, penaltyParam, package);
+    DEBUG_PRINT("BNZ: ",Miscellaneous.nonZeros()/fullSize);
     std::cout<<"Assembling overall system matrix"<<std::endl;
     SpD StiffnessMatrix = KMatrix + PMatrix - SMatrix - SMatrixT + Miscellaneous;
+    DEBUG_PRINT("TotalNZ: ",StiffnessMatrix.nonZeros()/fullSize);
+
+    double tol = 1e-14;
+
+    uint64_t totalNZ = 0;
+
+    for (int k = 0; k < StiffnessMatrix.outerSize(); ++k) {
+        for (SpD::InnerIterator it(StiffnessMatrix, k); it; ++it) {
+            if (it.value() > tol) {
+                totalNZ++;
+            }
+        }
+    }
+
+    DEBUG_PRINT("actual nnz: ", totalNZ / nNodesD);
 
     // std::cout<<"All:/n"<<StiffnessMatrix<<std::endl;
     // std::cout<<"Boundary:/n"<<Miscellaneous<<std::endl;

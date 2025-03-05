@@ -12,7 +12,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Append compiler flags instead of overwriting
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -DVERBOSE -std=c++17 -stdlib=libc++ -I/usr/include/c++/v1")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-value -Wno-switch -O3 -DVERBOSE -std=c++17 -stdlib=libc++ -I/usr/include/c++/v1")
 
 
 # Ensure standard library paths are included

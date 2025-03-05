@@ -17,6 +17,7 @@ bcs = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 
 exeSelect = 1
 
+osName = platform.system()
 if osName == "darwin" or osName.startswith("linux"):
     toRun = "./build/diff"
 elif osName == "windows":
