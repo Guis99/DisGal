@@ -11,6 +11,10 @@ sys.path.insert(0,'../Utils')
 import Utils
 toRun = Utils.getExecutableName("diffDG")
 
+
+printflag = True # toggles plotting of data
+
+
 numThreads = 1 # change for multithreading
 
 # discretization parameters
@@ -52,8 +56,6 @@ def draw_cell_nr(cell, ax):
         # ax.text(child['x'], child['y'], str(child['CID']), ha='center', va='center', fontsize=8, color='black')
 
         ax.add_patch(rect)
-
-printflag = False # toggles plotting of data
 
 if printflag:
     # Load your data
