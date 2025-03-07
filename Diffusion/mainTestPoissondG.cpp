@@ -7,15 +7,21 @@
 using namespace QTM;
 
 int main(int argc, char* argv[]) {
+    #ifdef MULTITHREAD
+        uint64_t numThreads = std::stoi(argv[argc-1]);
+        Eigen::setNbThreads(numThreads);
+        std::cout << "using " << numThreads << " threads" << std::endl;
+    #endif
+
     int nx;
     int ny;
     int deg;
     double Lx;
     double Ly;
 
-    std::cout<<argc<<"\n-----------------------------------\n";
+    std::cout<<"\n-----------------------------------\n";
     std::cout<<"| Initializing dG Poisson problem |";
-    std::cout<<argc<<"\n-----------------------------------\n";
+    std::cout<<"\n-----------------------------------\n";
 
     nx = std::stoi(argv[2]); ny = std::stoi(argv[3]); deg = std::stoi(argv[1]);
     Lx = std::stod(argv[4]); Ly = std::stod(argv[5]);

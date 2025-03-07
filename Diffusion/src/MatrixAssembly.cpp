@@ -72,7 +72,6 @@ SpD PMA::StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
         // std::cout<<coeffMat.rows()<<", "<<coeffMat.cols()<<std::endl;
         // std::cout<<weightMat.rows()<<", "<<weightMat.cols()<<std::endl;
         
-        DEBUG_PRINT("time1");
         localElemMat = combineXT*coeffMat*weightMat*combinedX +
                         combineYT*coeffMat*weightMat*combinedY;
  
@@ -80,7 +79,6 @@ SpD PMA::StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
         auto nodeBound = elm->nodes[0];
         // std::vector<int> nodesInElm = elm->Nodes;
         // Generate i,j,v triplets
-        DEBUG_PRINT("time2");
         for (int j=0; j<numElemNodes; j++) {
             for (int i=0; i<numElemNodes; i++) {
                 tripletList.emplace_back(nodeBound+i,nodeBound+j,localElemMat(i,j));

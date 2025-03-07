@@ -11,16 +11,18 @@ sys.path.insert(0,'../Utils')
 import Utils
 toRun = Utils.getExecutableName("diffDG")
 
+numThreads = 1 # change for multithreading
+
 # discretization parameters
-deg = 60
-div = 1
-Lx = 1
+deg = 2 # order of approximation
+div = 50 # number of elements in 1D
+Lx = 1 # size of domain
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
 
-penalty = 50
+penalty = 50 # penalty parameter for cross-element discontinuities
 
-force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
+force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)" # source term
 # force = "0"
 
 numBoundaries = 4
@@ -28,7 +30,7 @@ numBoundaries = 4
 btm = {"1":"0", "0":"1"} # if bc is not one, it has to be the other
 
 
-ess = ["1","1","1","1"]
+ess = ["1","1","1","1"] # "1" means that a boundary is Dirichlet (essential), "0" means that it is Neumann (natural)
 nat = [btm[bc] for bc in ess]
 
 dirichletBC = ["sin(5*pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
@@ -36,8 +38,8 @@ neumannBC = ["0", "0", "0", "0"]
 
 dirichletBC_trimmed = [dirichletBC[i] for i in range(numBoundaries) if ess[i] == "1"]
 neumannBC_trimmed = [neumannBC[i] for i in range(numBoundaries) if nat[i] == "1"]
-subprocess.run([toRun, *meshInfo, str(penalty), force, str(numBoundaries), *ess, *nat, *dirichletBC_trimmed, *neumannBC_trimmed]) 
-# subprocess.run([toRun, "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "50"])  
+
+subprocess.run([toRun, *meshInfo, str(penalty), force, str(numBoundaries), *ess, *nat, *dirichletBC_trimmed, *neumannBC_trimmed, str(numThreads)]) 
 
 def draw_cell_nr(cell, ax):
     # Adjusting for the center coordinates and level-dependent size
@@ -51,17 +53,17 @@ def draw_cell_nr(cell, ax):
 
         ax.add_patch(rect)
 
-printflag = False
+printflag = False # toggles plotting of data
 
 if printflag:
-# Step 1: Load your data
+    # Load your data
     print("Loading results")
     data = np.loadtxt('outputdG.txt', delimiter=',')
     x = data[:, 0]
     y = data[:, 1]
     z = data[:, 2]
-
-    # Step 2: Interpolate your data onto a regular grid
+    
+    # Interpolate data onto a regular grid
     # Create grid coordinates
     print("Interpolating data")
     xi = np.linspace(min(x), max(x), 100)
@@ -72,7 +74,7 @@ if printflag:
     zi = griddata((x, y), z, (xi, yi), method='cubic')
 
     print("Plotting data")
-    # Step 3: Plot the contour
+    # Plot contour
     fig,ax=plt.subplots()
     plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
     plt.colorbar()  # Show color scale
@@ -86,7 +88,7 @@ if printflag:
         quadtree = json.load(f)
 
         draw_cell_nr(quadtree, ax)
-        plt.axis('equal')  # Ensures the plot is square in shape
+        plt.axis('equal')
 
 
     fig2 = plt.figure(figsize =(14, 9))

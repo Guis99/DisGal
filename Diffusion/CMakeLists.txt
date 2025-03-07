@@ -1,24 +1,21 @@
 cmake_minimum_required(VERSION 3.15)
-project(LinearAdvection)
+project(Diffusion)
 
 # project root = DisGal/Diffusion
 
 include(CMakePrintHelpers)
 
-set(CMAKE_C_COMPILER /usr/bin/clang)
-set(CMAKE_CXX_COMPILER /usr/bin/clang++)
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Append compiler flags instead of overwriting
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-value -Wno-switch -O3 -DVERBOSE -std=c++17 -stdlib=libc++ -I/usr/include/c++/v1")
-
-
-# Ensure standard library paths are included
 if(APPLE)
-    # include_directories(/Library/Developer/CommandLineTools/usr/include/c++/v1)
+    set(CMAKE_C_COMPILER /usr/bin/clang)
+    set(CMAKE_CXX_COMPILER /usr/bin/clang++)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-value -Wno-switch -O3 -DVERBOSE -std=c++17 -stdlib=libc++")
 elseif(UNIX)
+    set(CMAKE_C_COMPILER /usr/bin/gcc)
+    set(CMAKE_CXX_COMPILER /usr/bin/g++)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fopenmp -Wno-unused-value -Wno-switch -O3 -DVERBOSE -DMULTITHREAD -std=c++17 -stdlib=libc++")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -I/usr/include/c++/$(gcc -dumpversion)")
 endif()
 
