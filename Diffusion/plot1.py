@@ -5,32 +5,41 @@ import json
 import matplotlib.patches as patches
 
 import subprocess
+import sys
+
+sys.path.insert(0,'../Utils')
+import Utils
+toRun = Utils.getExecutableName("diffDG")
+
+numThreads = 1 # change for multithreading
 
 # discretization parameters
-deg = 2
-div = 10
-Lx = 1
+deg = 2 # order of approximation
+div = 50 # number of elements in 1D
+Lx = 1 # size of domain
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
 
-penalty = 500
+penalty = 50 # penalty parameter for cross-element discontinuities
 
-force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)"
-force = "0"
+force = "2*pi^2*sin(pi*x/1)*sin(pi*y/1)" # source term
+# force = "0"
 
 numBoundaries = 4
 
-ess = ["1","1","1","1"]
-nat = ["0","0","0","0"]
+btm = {"1":"0", "0":"1"} # if bc is not one, it has to be the other
 
-dirichletBC = ["sin(pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
-neumannBC = []
 
-exeSelect = 2
-toRun = ".\main1.exe"
+ess = ["1","1","1","1"] # "1" means that a boundary is Dirichlet (essential), "0" means that it is Neumann (natural)
+nat = [btm[bc] for bc in ess]
 
-subprocess.run([toRun, *meshInfo, str(penalty), force, str(numBoundaries), *ess, *nat, *dirichletBC, *neumannBC]) 
-# subprocess.run([toRun, "3", str(div2), str(div2), "1", "1", force, "0", "0", "0", "0", "50"])  
+dirichletBC = ["sin(5*pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
+neumannBC = ["0", "0", "0", "0"]
+
+dirichletBC_trimmed = [dirichletBC[i] for i in range(numBoundaries) if ess[i] == "1"]
+neumannBC_trimmed = [neumannBC[i] for i in range(numBoundaries) if nat[i] == "1"]
+
+subprocess.run([toRun, *meshInfo, str(penalty), force, str(numBoundaries), *ess, *nat, *dirichletBC_trimmed, *neumannBC_trimmed, str(numThreads)]) 
 
 def draw_cell_nr(cell, ax):
     # Adjusting for the center coordinates and level-dependent size
@@ -44,49 +53,52 @@ def draw_cell_nr(cell, ax):
 
         ax.add_patch(rect)
 
-# Step 1: Load your data
-print("Loading results")
-data = np.loadtxt('outputdG.txt', delimiter=',')
-x = data[:, 0]
-y = data[:, 1]
-z = data[:, 2]
+printflag = False # toggles plotting of data
 
-# Step 2: Interpolate your data onto a regular grid
-# Create grid coordinates
-print("Interpolating data")
-xi = np.linspace(min(x), max(x), 100)
-yi = np.linspace(min(y), max(y), 100)
-xi, yi = np.meshgrid(xi, yi)
+if printflag:
+    # Load your data
+    print("Loading results")
+    data = np.loadtxt('outputdG.txt', delimiter=',')
+    x = data[:, 0]
+    y = data[:, 1]
+    z = data[:, 2]
+    
+    # Interpolate data onto a regular grid
+    # Create grid coordinates
+    print("Interpolating data")
+    xi = np.linspace(min(x), max(x), 100)
+    yi = np.linspace(min(y), max(y), 100)
+    xi, yi = np.meshgrid(xi, yi)
 
-# Interpolate z values on the grid
-zi = griddata((x, y), z, (xi, yi), method='cubic')
+    # Interpolate z values on the grid
+    zi = griddata((x, y), z, (xi, yi), method='cubic')
 
-print("Plotting data")
-# Step 3: Plot the contour
-fig,ax=plt.subplots()
-plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
-plt.colorbar()  # Show color scale
-# plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
-plt.xlabel('X')
-plt.ylabel('Y')
-plt.title('Contour plot')
+    print("Plotting data")
+    # Plot contour
+    fig,ax=plt.subplots()
+    plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
+    plt.colorbar()  # Show color scale
+    # plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.title('Contour plot')
 
-print("Plotting quadtree")
-with open("quadtreedG.json", 'r') as f:
-    quadtree = json.load(f)
+    print("Plotting quadtree")
+    with open("quadtreedG.json", 'r') as f:
+        quadtree = json.load(f)
 
-    draw_cell_nr(quadtree, ax)
-    plt.axis('equal')  # Ensures the plot is square in shape
-
-
-fig2 = plt.figure(figsize =(14, 9))
-ax2 = plt.axes(projection ='3d')
- 
-# Creating plot
-ax2.plot_surface(xi, yi, zi)
-ax2.set_xlabel('x')
+        draw_cell_nr(quadtree, ax)
+        plt.axis('equal')
 
 
-plt.show()
+    fig2 = plt.figure(figsize =(14, 9))
+    ax2 = plt.axes(projection ='3d')
+    
+    # Creating plot
+    ax2.plot_surface(xi, yi, zi)
+    ax2.set_xlabel('x')
+
+
+    plt.show()
 
 

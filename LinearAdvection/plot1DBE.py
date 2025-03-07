@@ -3,10 +3,11 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 import subprocess
+import platform
 
 # discretization parameters
-deg = 1
-div = 100
+deg = 4
+div = 50
 Lx = 2
 
 cfl = 1 / ((deg + 1)**2) / 4
@@ -14,7 +15,7 @@ cfl = 1 / ((deg + 1)**2) / 4
 
 print(cfl)
 
-timeLength = .6
+timeLength = 4.
 timeStepSize = cfl * Lx / div
 timeSteps = timeLength / timeStepSize
 
@@ -29,13 +30,23 @@ meshInfo = [str(deg), str(div), str(Lx)] # pack into list of strings
 
 initialCondition = "-((4 * x - 1) ^ 20 - 1)* .75"
 initialCondition = "2*x - .5"
-initialCondition = "sin(2*x*pi)+.25"
+initialCondition = ".5*sin(3*2*x*pi)"
+
+baseline = 1.
+cutoff = 10.
 # initialCondition = "1"
 # initialCondition = "x"
 
-toRun = "t1DBE.exe" 
+osName = platform.system()
+if osName == "darwin" or osName.startswith("linux"):
+    toRun = "./build/Adv1DBE"
+elif osName == "windows":
+    toRun = "./build/Adv1DBE.exe"
 
-subprocess.run([toRun, *meshInfo, initialCondition, str(timeLength), str(timeSteps), str(integrators[integratorType]), str(systemForm)])
+
+subprocess.run([toRun, *meshInfo, initialCondition, str(timeLength), 
+                str(timeSteps), str(integrators[integratorType]), 
+                str(systemForm), str(baseline), str(cutoff)])
  
 # Creating dataset
 print("Loading results")
@@ -52,9 +63,9 @@ fig, ax = plt.subplots()
 # ax.set_zlim([0,1])
 # Creating plot
 line, = ax.plot(x, Z[0, :])
-ax.axhline(1)
-ax.axhline(-1)
-ax.set_ylim([-1.5,1.5])
+ax.axhline(1+baseline)
+ax.axhline(-1+baseline)
+ax.set_ylim([-1.5+baseline,1.5+baseline])
 
 # Function to update the plot in each frame
 def update(frame):

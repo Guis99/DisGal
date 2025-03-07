@@ -1,8 +1,8 @@
-#include "..\..\qtm\include\QTM.hpp"
-#include "..\..\Dependencies\Eigen\Core"
-#include "..\..\Dependencies\Eigen\Sparse"
-#include "..\..\Dependencies\unsupported\Eigen\KroneckerProduct"
-#include "..\..\Dependencies\Utils\Utils.hpp"
+#include "../../Dependencies/QTM/include/QTM.hpp"
+#include "../../Dependencies/Eigen/Core"
+#include "../../Dependencies/Eigen/Sparse"
+#include "../../Dependencies/unsupported/Eigen/KroneckerProduct"
+#include "../../Utils/Utils.hpp"
 // #include "..\..\Meshing\Meshing.hpp"
 
 #ifndef MatrixAssembly_diff
@@ -87,6 +87,16 @@ DvD PoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 std::vector<std::string> bcs,
                 double penaltyParam);
 DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
+                double k,
+                std::string source,
+                std::vector<bool> isDirichletBC,
+                std::vector<bool> isNeumannBC,
+                std::vector<std::string> dbcs,
+                std::vector<std::string> nbcs,
+                double penaltyParam,
+                double dirichletPenalty);
+
+double dgComputeResidual(QTM::QuadTreeMesh& inputMesh,
                 double k,
                 std::string source,
                 std::vector<bool> isDirichletBC,

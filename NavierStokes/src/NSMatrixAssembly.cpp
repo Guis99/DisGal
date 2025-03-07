@@ -1,4 +1,4 @@
-#include "..\include\NSMatrixAssembly.hpp"
+#include "../include/NSMatrixAssembly.hpp"
 
 SpD NSMA::PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // Oriented as V-P.
@@ -55,7 +55,7 @@ SpD NSMA::PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     for (auto &elm : leaves) {
         auto jac = elm->width;
         // calculate local matrix
-        localElemMat = jac*combineT*weightMat;
+        localElemMat = jac*combined*weightMat;
  
         // Get nodes in element
         auto nodeBound = elm->nodes[0];
@@ -571,6 +571,285 @@ SpD NSMA::PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu) {
     return mat;
 }
 
+SpD NSMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::quadUtils& package) {
+    int deg = mesh.deg;
+    int numNodes = deg+1;
+    int numElemNodes = mesh.numElemNodes;
+    int nElements = mesh.numLeaves;
+    int nNodes = mesh.nNodes();
+
+    //  load package data
+    DD weightMat = package.weightMat;
+    DD quadWeights1D = package.quadWeights1D;
+
+    DD nodalVals = package.nodalVals;
+
+    DD combinedX = package.combinedX;
+    DD combinedY = package.combinedY;
+
+    std::array<DD,4> splitCellVals = package.splitCellVals;
+
+    std::array<DD,4> splitCellGradsX = package.splitCellGradsX;
+    std::array<DD,4> splitCellGradsY = package.splitCellGradsY;
+
+    std::vector<QTM::Direction> directions = package.directions;        
+    std::vector<QTM::Direction> oppdirs = package.oppdirs;
+    std::vector<std::vector<int>> localNodes = package.localNodes;
+
+    // basis func to node mapping
+    DD B; B.setIdentity(numElemNodes, numElemNodes);
+
+    // get basis func vals for split cell quad
+    std::vector<double> BhInitializer; 
+    BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
+
+    // get unit vecs
+    DvD topVec = DvD::Zero(numNodes); topVec(0) = 1;
+    DvD bottomVec = DvD::Zero(numNodes); bottomVec(deg) = 1;
+
+    // index vectors for split cell gauss points
+    std::vector<int> frontIdxs(numNodes, 0);  
+    std::vector<int> backIdxs(numNodes, 0);
+
+    for (int i=0; i<numNodes; i++) {
+        frontIdxs[i] = i;
+        backIdxs[i] = i+deg;
+    }
+
+    std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
+
+    auto leaves = mesh.leaves;
+    double a; // penalty parameters
+
+    std::vector<int> boundaryNodes;
+    std::vector<int> neighborNodes;
+    std::vector<int> neighborLocals;
+    std::vector<int> elemNodes;
+    std::vector<int> elemLocals;
+    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+
+    for (auto &elm : leaves) {
+        elemNodes = mesh.GetGlobalElemNodes(elm->CID);
+        elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
+        // std::cout<<"here5"<<std::endl;
+        // std::cout<<"-----------"<<std::endl;
+        // std::cout<<"elem: "<<elm->CID<<std::endl;
+        // for (auto i : elemNodes) {
+        //     std::cout<<i<<std::endl;
+        // }
+        // std::cout<<"neighbors:\n";
+        // get neighbors
+        for (auto dir : directions) {
+            // std::cout<<"neighbor in direction "<<dir<<std::endl;
+            QTM::Direction oppdir = oppdirs[dir];
+            neighbors = mesh.GetCellNeighbors(dir, elm->CID);
+            // std::cout<<"here6"<<std::endl;
+            // if (neighbors.size() == 0) {
+            //     // neighborNodes = {};
+            //     // neighborLocals = {};
+            //     continue;
+            // }
+            for (int NI = 0; NI < neighbors.size(); NI++) { 
+                auto neighbor = neighbors[NI];
+                double jac;
+                if (!neighbor) { 
+                    // std::cout<<"here7"<<std::endl;
+                    // continue;
+                    neighborNodes = {};
+                    neighborLocals = {};
+                    neighbor = elm;
+                }
+    
+                // calculate penalty param
+                else if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                // std::cout<<"here8"<<std::endl;
+                    jac = std::min(elm->width, neighbor->width);
+                    neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
+                    neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                    // std::cout<<"here9"<<std::endl;
+                } else { 
+                    continue;
+                }
+                a = alpha/jac/2;
+                // calculate jump matrix
+                DD topJump;
+                // std::cout<<nodalVals.cols()<<", "<<nodalVals.rows()<<std::endl;
+                // Utils::printVec(neighborLocals);
+                // Utils::printVec(localNodes[oppdir]);
+                DD bottomJump = -nodalVals(neighborLocals, localNodes[oppdir]);
+                // std::cout<<"here10"<<std::endl;
+                if (elm->level == neighbor->level) {
+                    topJump = nodalVals(elemLocals, localNodes[dir]);
+                } else {
+                    topJump = splitCellVals[dir](elemLocals, splitIdx[NI]);
+                }
+                // std::cout<<"here11"<<std::endl;
+                DD jumpMatrix(elemNodes.size() + neighborNodes.size(), numNodes);
+                // std::cout<<topJump.rows()<<", "<<topJump.cols()<<std::endl;
+                // std::cout<<bottomJump.rows()<<", "<<bottomJump.cols()<<std::endl;
+                // std::cout<<elemNodes.size()<<", "<<neighborNodes.size()<<", "<<neighborLocals.size()<<std::endl;
+                // std::cout<<"-----------"<<std::endl;
+                jumpMatrix << topJump, bottomJump;
+
+                DD jumpMatrixT = (DD)(jumpMatrix.transpose());
+                // std::cout<<"here12"<<std::endl;
+                DD localElemMat = (DD)(a * jumpMatrix * jac*quadWeights1D * jumpMatrixT);
+
+                boundaryNodes.reserve(elemNodes.size() + neighborNodes.size());
+                boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
+                boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
+
+                // std::cout<<"here13"<<std::endl;
+
+                for (int j=0; j<boundaryNodes.size(); j++) {
+                    for (int i=0; i<boundaryNodes.size(); i++) {
+                        tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                    }
+                }    
+                // std::cout<<"here14"<<std::endl;
+                boundaryNodes.clear();
+            }
+        }
+    }
+    // Declare and construct sparse matrix from triplets
+    SpD mat(nNodes,nNodes);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    return mat;
+}
+
+SpD NSMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) {
+    int deg = mesh.deg;
+    int numNodes = deg+1;
+    int numElemNodes = mesh.numElemNodes;
+    int nElements = mesh.numLeaves;
+    int nNodes = mesh.nNodes();
+    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+
+    // get quad weights in 1D
+    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+
+    // load package data
+    DD quadWeights1D = package.quadWeights1D;
+    DD nodalValues = package.nodalVals;
+
+    DD combinedX = package.combinedX;
+    DD combinedY = package.combinedY;
+    
+    std::array<DD, 4> splitCellVals = package.splitCellVals;
+    std::array<DD, 4> splitCellGradsX = package.splitCellGradsX;
+    std::array<DD, 4> splitCellGradsY = package.splitCellGradsY;
+
+    std::vector<QTM::Direction> directions = package.directions;        
+    std::vector<QTM::Direction> oppdirs = package.oppdirs;
+    std::vector<std::vector<int>> localNodes = package.localNodes;
+
+    // index vectors for split cell gauss points
+    std::vector<int> frontIdxs(numNodes, 0);  
+    std::vector<int> backIdxs(numNodes, 0);
+
+    for (int i=0; i<numNodes; i++) {
+        frontIdxs[i] = i;
+        backIdxs[i] = i+deg;
+    }
+
+    std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
+
+    double normalX[4] = {0,1,0,-1};
+    double normalY[4] = {1,0,-1,0};
+
+    std::vector<int> boundaryNodes;
+    std::vector<int> neighborNodes;
+    std::vector<int> neighborLocals;
+    std::vector<int> elemNodes;
+    std::vector<int> elemLocals;
+    std::vector<std::shared_ptr<QTM::Cell>> neighbors;
+    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    auto leaves = mesh.GetAllCells();
+    double jac;
+    double fac;                                            
+    for (auto &elm : leaves) {
+        elemNodes = mesh.GetGlobalElemNodes(elm->CID);
+        elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
+        // get neighbors
+        for (auto dir : directions) {
+            neighbors = mesh.GetCellNeighbors(dir, elm->CID);
+            QTM::Direction oppdir = oppdirs[dir];
+            for (int NI = 0; NI < neighbors.size(); NI++) { 
+                auto neighbor = neighbors[NI];
+                if (!neighbor) { // skip exterior edges
+                    continue;
+                    neighborNodes = {};
+                    neighborLocals = {};
+                    neighbor = elm;
+                    fac = 1;
+                }
+
+                else if (neighbor->CID < elm->CID || elm->level < neighbor->level) { // case appropriate neighbor exists
+                    jac = std::min(elm->width, neighbor->width);
+                    neighborNodes = mesh.GetGlobalElemNodes(neighbor->CID);
+                    neighborLocals = mesh.GetTrimmedLocalNodes(neighbor->CID, neighborNodes);
+                    fac = .5;
+                } else { 
+                    continue;
+                }
+                // jump matrix setup
+                DD topJump;
+                DD bottomJump = -nodalValues(neighborLocals, localNodes[oppdir]);
+
+                // flux matrix setup
+                DD topGradX;
+                DD topGradY;
+                DD bottomGradX = normalX[oppdir] * combinedX(localNodes[oppdir], neighborLocals);
+                DD bottomGradY = normalY[oppdir] * combinedY(localNodes[oppdir], neighborLocals);
+
+                if (elm->level == neighbor->level) {
+                    topJump = nodalValues(elemLocals, localNodes[dir]);
+                    topGradX = normalX[dir] * combinedX(localNodes[dir], elemLocals);
+                    topGradY = normalY[dir] * combinedY(localNodes[dir], elemLocals);
+                } else {
+                    topJump = splitCellVals[dir](elemLocals, splitIdx[NI]);
+                    topGradX = normalX[dir] * splitCellGradsX[dir](splitIdx[NI], elemLocals)/jac/2;
+                    topGradY = normalY[dir] * splitCellGradsY[dir](splitIdx[NI], elemLocals)/jac/2;
+                }
+
+                // calculate jump matrix
+                DD jumpMatrix(elemNodes.size() + neighborNodes.size(), numNodes);
+                jumpMatrix << topJump, bottomJump;
+
+                // calculate flux matrix
+                DD fluxMatrixX(numNodes, elemNodes.size() + neighborNodes.size());
+                DD fluxMatrixY(numNodes, elemNodes.size() + neighborNodes.size());
+
+                // place partial derivatives in combined mat
+                fluxMatrixX << topGradX, bottomGradX;
+                fluxMatrixY << topGradY, bottomGradY;
+
+                boundaryNodes.reserve(elemNodes.size() + neighborNodes.size()); // aggregated nodes in current and neighbor cell
+                boundaryNodes.insert(boundaryNodes.end(), elemNodes.begin(), elemNodes.end());
+                boundaryNodes.insert(boundaryNodes.end(), neighborNodes.begin(), neighborNodes.end());
+
+                // assemble local matrix 
+                DD localElemMat = (DD)(fac * jumpMatrix * quadWeights1D * fluxMatrixX + 
+                                    fac * jumpMatrix * quadWeights1D * fluxMatrixY);
+
+                for (int j=0; j<boundaryNodes.size(); j++) {
+                    for (int i=0; i<boundaryNodes.size(); i++) {
+                        tripletList.emplace_back(boundaryNodes[i],boundaryNodes[j],localElemMat(i,j));
+                    }
+                }
+            boundaryNodes.clear();
+            }
+        }
+    }
+    // Declare and construct sparse matrix from triplets
+    SpD mat(nNodes,nNodes);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    return mat;
+}
+
 SpD NSMA::PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir) {
     // <q dot n> [u]
     int deg = mesh.deg;
@@ -830,38 +1109,12 @@ DvD NSMA::AssembleStokesSource(QTM::QuadTreeMesh& mesh,
                             DvD& XSource,
                             DvD& YSource) {
     int nNodes = mesh.nNodes();
-    int offset1 = nNodes;
-    int totalNNZ = XSource.nonZeros() + YSource.nonZeros();
-    // std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(totalNNZ);
-
-    std::vector<double> outInit;
-    outInit.insert(outInit.begin(), XSource.begin(), XSource.end());
-    outInit.insert(outInit.begin(), YSource.begin(), YSource.end());
 
     DvD out(3*nNodes+1);
     DvD allZeros = DvD::Zero(nNodes+1);
 
     out << XSource, YSource, allZeros;
 
-    // Eigen::Map<DvD> outP(outInit.data(),3*nNodes+1);
-    // DvD out = (DvD)outP;
-
-    // // insert X source
-    // for (int k = 0; k < XSource.outerSize(); ++k) {
-    //     for (SpD::InnerIterator it(XSource, k); it; ++it) {
-    //         tripletList.emplace_back(it.row(), it.col(), it.value());
-    //     }
-    // }
-
-    // // insert Y source
-    // for (int k = 0; k < YSource.outerSize(); ++k) {
-    //     for (SpD::InnerIterator it(YSource, k); it; ++it) {
-    //         tripletList.emplace_back(it.row()+offset1, it.col(), it.value());
-    //     }
-    // }
-
-    // SpD mat(3*nNodes+1,1);
-    // mat.setFromTriplets(tripletList.begin(), tripletList.end());
     return out;
 }
 
@@ -995,35 +1248,29 @@ DvD NSMA::IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
 
     PMA::quadUtils package = PMA::GenerateAssemblyPackage(inputMesh);
 
-    std::cout<<"Assembling stiffness matrix...";
+    std::cout<<"Assembling stiffness matrix..."<<std::endl;
     SpD KMatrix = PMA::StiffnessMatrix(inputMesh, mu); 
     
-    std::cout<<"Assembling divergence matrix...";
+    std::cout<<"Assembling divergence matrix..."<<std::endl;
     SpD PVMatrixX = NSMA::PVMatrix(inputMesh, 1);
     SpD PVMatrixY = NSMA::PVMatrix(inputMesh, 2); 
 
-    std::cout<<"Assembling penalty matrix...";
-    SpD PMatrix = PMA::PenaltyMatrix(inputMesh, mu, penaltyParam, package);
+    std::cout<<"Assembling penalty matrix..."<<std::endl;
+    SpD PMatrix = NSMA::PenaltyMatrix(inputMesh, mu, penaltyParam, package);
 
-    std::cout<<"Assembling flux matrix...";
-    SpD SMatrix = PMA::FluxMatrix(inputMesh, mu, package); 
+    std::cout<<"Assembling flux matrix..."<<std::endl;
+    SpD SMatrix = NSMA::FluxMatrix(inputMesh, mu, package); 
 
-    std::cout<<"Assembling pressure flux matrix...";
+    std::cout<<"Assembling pressure flux matrix..."<<std::endl;
     SpD PAMatrixX = NSMA::PressureAvgMatrix(inputMesh, 1); // pressure average, velocity jump
     SpD PAMatrixY = NSMA::PressureAvgMatrix(inputMesh, 2);
 
     SpD PJMatrixX = NSMA::PressureJumpMatrix(inputMesh, 1); // pressure jump, velocity average
     SpD PJMatrixY = NSMA::PressureJumpMatrix(inputMesh, 2); 
 
-    std::cout<<"Assembling combined LHS matrix...";
-    SpD SMatrixT = (SpD)(SMatrix.transpose()); 
+    std::cout<<"Assembling combined LHS matrix..."<<std::endl;
+    SpD SMatrixT = SMatrix.transpose(); 
     SpD dgPoissonMat = KMatrix + PMatrix - SMatrix - SMatrixT;
-
-    // SpD mat1 = -PVMatrixX + PAMatrixX; // pressure gradient
-    // SpD mat2 = -PVMatrixY + PAMatrixY;
-
-    // SpD mat1T = PVMatrixX - PJMatrixX; // continuity
-    // SpD mat2T = PVMatrixY - PJMatrixY;
 
     // SpD StiffnessMatrix = AssembleStokesSystem(inputMesh, dgPoissonMat, 
     //                         combinedPVMatrixX, combinedPVMatrixY,
@@ -1035,6 +1282,12 @@ DvD NSMA::IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     SpD mat1 = -PVMatrixX + PAMatrixX; // pressure gradient
     SpD mat2 = -PVMatrixY + PAMatrixY;
 
+    // SpD mat3 = (SpD)(mat1.transpose()); // continuity
+    // SpD mat4 = (SpD)(mat2.transpose());
+
+    SpD mat3 = -PVMatrixX + PJMatrixX; // continuity
+    SpD mat4 = -PVMatrixY + PJMatrixY;
+
     // SpD mat1 = -PVMatrixX + PJMatrixXT; // pressure gradient
     // SpD mat2 = -PVMatrixY + PJMatrixYT;
 
@@ -1045,25 +1298,18 @@ DvD NSMA::IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     // SpD mat2T = (SpD)(PVMatrixY.transpose());
 
     // SpD mat1Int = -PVMatrixX + PJMatrixXT; // pressure gradient
-    // SpD mat2Int = -PVMatrixY + PJMatrixYT;
-
-    SpD mat3 = (SpD)(mat1.transpose()); // continuity
-    SpD mat4 = (SpD)(mat2.transpose());
-
-    mat3 = PVMatrixX - PJMatrixX;
-    mat4 = PVMatrixY - PJMatrixY;
+    // SpD mat2Int = -PVMatrixY + PJMatrixYT;;
 
     SpD StiffnessMatrix = NSMA::AssembleStokesSystem(inputMesh, dgPoissonMat, 
                             mat1, mat2,
                             mat3, mat4);
 
-    std::cout<<"Assembling RHS vector...";
+    std::cout<<"Assembling RHS vector..."<<std::endl;
     DvD FMatrixX = PMA::AssembleFVec(inputMesh, 1.0, source[0]);
     DvD FMatrixY = PMA::AssembleFVec(inputMesh, 1.0, source[1]);
     DvD FMatrix = NSMA::AssembleStokesSource(inputMesh, FMatrixX, FMatrixY);
-    std::cout<<" finished!"<<std::endl;
 
-    std::cout<<"Assembling boundary condition vector...";
+    std::cout<<"Assembling boundary condition vector..."<<std::endl;
     std::vector<int> allBoundaryNodes; // boundary dofs, *NOT* mesh nodes, where dirichlet bcs are applied 
     std::vector<std::vector<int>> VDN; // mesh nodes where velocity is fixed
     std::vector<std::vector<int>> PDN; // mesh nodes where pressure is fixed
@@ -1094,7 +1340,7 @@ DvD NSMA::IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
                             VDirichlet, 
                             PDirichlet;
 
-    std::cout<<"Assembling null-orth matrix...";
+    std::cout<<"Assembling null-orth matrix..."<<std::endl;
     for (int i=0; i<3; i++) {
         int offset = i*nNodes;
         for (int fn : freeNodes) {
@@ -1111,9 +1357,8 @@ DvD NSMA::IncompressibleStokesSolve(QTM::QuadTreeMesh& inputMesh,
     SpD nullSpace(3*nNodes+1, allBoundaryNodes.size());
     SpD columnSpace(3*nNodes+1, freeNodesAll.size());
     PMA::GetExtensionMatrices(inputMesh, allBoundaryNodes, freeNodesAll, nullSpace, columnSpace);
-    std::cout<<" finished!"<<std::endl;
 
-    std::cout<<"Solving system with "<<freeNodesAll.size()<<" degrees of freedom... ";
+    std::cout<<"Solving system with "<<freeNodesAll.size()<<" degrees of freedom... "<<std::endl;
     DvD x = PMA::ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, dirichletBoundaryVals);
     std::cout<<"System solved!"<<std::endl;
     std::cout<<"multiplier: "<<x(3*nNodes)<<std::endl;

@@ -70,6 +70,9 @@ int main(int argc, char* argv[]) {
     double timeStep = timeLength / numTimeSteps; 
     
     int integratorType = std::stoi(argv[7]);
+    auto baseline = argv[8];
+    double cutoff = std::stod(argv[9]);
+
     std::vector<std::string> integrators = {"Forward Euler",
                                             "Crank-Nicholson",
                                             "RK4",
@@ -93,23 +96,13 @@ int main(int argc, char* argv[]) {
     auto nodes = mesh.nodes;
     int nNodes = nodes.size();
 
-    int stopIdx = 0;
-    std::vector<double> x;
-
-    while (nodes[stopIdx].position <= .5) {
-        x.push_back(nodes[stopIdx++].position); 
-    }
-    
-    std::vector<double> ICVec = Utils::EvalSymbolicBC1D(x.data(), stopIdx, IC);
-
-    ICVec.reserve(nNodes);
-
-    for (stopIdx; stopIdx<nNodes; stopIdx++) {
-        ICVec.push_back(0);
+    DEBUG_PRINT("ALL NODE POS");
+    for (auto node : nodes) {
+        DEBUG_PRINT(node.position);
     }
 
-    Eigen::Map<DvD> InitialCondition(ICVec.data(), nNodes, 1);
-    DvD initialCondition = (DvD)InitialCondition;
+    DvD initialCondition = getICVec(mesh, nNodes, baseline, cutoff, IC);
+    DEBUG_PRINT("ic size: ",initialCondition.rows()," x ", initialCondition.cols());
 
     std::vector<int> boundaryNodes = {};
     std::vector<int> freeNodes; freeNodes.reserve(nNodes);
@@ -135,12 +128,10 @@ int main(int argc, char* argv[]) {
     std::cout<<"Computing solution..."<<std::endl;
     std::vector<DvD> solns = ComputeTransientSolution(StiffnessMatrix, MassMatrix, 
                                                         columnSpace, 
-                                                        nullSpace, boundaryVals, 
-                                                        initialCondition, timeStep, numTimeSteps,
+                                                        nullSpace, initialCondition, 
+                                                        timeStep, numTimeSteps,
                                                         integratorType);
 
-    
-    
     std::vector<double> xPositions;
     xPositions.reserve(nNodes);
     for (int i=0; i<nNodes; i++) {

@@ -1,5 +1,5 @@
-#include "..\include\MatrixAssembly.hpp"
-#include "..\..\Dependencies\Eigen\SVD"
+#include "../include/MatrixAssembly.hpp"
+#include "../../Dependencies/Eigen/SVD"
 
 DD PMA::GenerateQuadWeights(std::vector<double> &gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes) {
     // Generate quadrature weight matrices
@@ -44,7 +44,7 @@ SpD PMA::StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
     DD weightMat = PMA::GenerateQuadWeights(gaussPoints, gaussPoints, numNodes, numNodes, numElemNodes);
     // Generate mass matrices
     DD B; B.setIdentity(numNodes, numNodes);
-    DD coeffMat(numElemNodes, numElemNodes);
+    SpD coeffMat(numElemNodes, numElemNodes);
     coeffMat.setIdentity(); coeffMat *= k;
     
     // Get element-wise matrix intermediates
@@ -99,8 +99,6 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
 
-    std::cout<<"here1"<<std::endl;
-
     //  load package data
     DD weightMat = package.weightMat;
     DD quadWeights1D = package.quadWeights1D;
@@ -118,8 +116,6 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
     std::vector<QTM::Direction> directions = package.directions;        
     std::vector<QTM::Direction> oppdirs = package.oppdirs;
     std::vector<std::vector<int>> localNodes = package.localNodes;
-
-    std::cout<<"here2"<<std::endl;
 
     // basis func to node mapping
     DD B; B.setIdentity(numElemNodes, numElemNodes);
@@ -143,8 +139,6 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
 
     std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
 
-    std::cout<<"here3"<<std::endl;
-
     auto leaves = mesh.leaves;
     double a; // penalty parameters
 
@@ -156,7 +150,6 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
     std::vector<std::shared_ptr<QTM::Cell>> neighbors;
     std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
 
-    std::cout<<"here4"<<std::endl;
     for (auto &elm : leaves) {
         elemNodes = mesh.GetGlobalElemNodes(elm->CID);
         elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
@@ -476,13 +469,10 @@ DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     auto allNodesPos = mesh.AllNodePos();
     auto startpoint = allNodesPos.data(); auto allocSize = allNodesPos.size();
     auto fEval = Utils::EvalSymbolicBC(startpoint, allocSize, evalStr);
-    Utils::printVec(fEval);
 
     // Initialize i,j,v triplet list for sparse matrix
     std::vector<Eigen::Triplet<double>> tripletList;
     tripletList.reserve(nElements * numElemNodes);
-
-    DvD out(nNodes);
 
     // Integrate over all elements
     DvD localElemMat(numElemNodes);
@@ -496,23 +486,23 @@ DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
         // for (int i=nodes[0]; i<=nodes[1]; i++) {
         //     collectSourceVals.push_back(fEval[i]);
         // }
-        Eigen::Map<DvD> sourceVector(collectSourceVals.data(), numElemNodes, 1);
+        Eigen::Map<DvD> sourceVector(collectSourceVals.data(), numElemNodes);
 
-        localElemMat = weightMat*sourceVector*jac*jac;
+        localElemMat = weightMat*jac*jac*sourceVector;
         // Get nodes in element
         
         // Generate i,j,v triplets
         for (int i=0; i<numElemNodes; i++) {
-            // tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
-            out[nodes[0]+i] += localElemMat[i];
+            tripletList.emplace_back(nodes[0]+i, 0, localElemMat(i));
+            // out[nodes[0]+i] += localElemMat[i];
         }  
     }
 
     // Declare and construct sparse matrix from triplets
-    // SpD mat(nNodes,1);
-    // mat.setFromTriplets(tripletList.begin(), tripletList.end());
-    // mat.makeCompressed();
-    std::cout<<"F_in: "<<out<<std::endl;
+    SpD mat(nNodes,1);
+    mat.setFromTriplets(tripletList.begin(), tripletList.end());
+    mat.makeCompressed();
+    DvD out = (DvD)mat;
     return out;
 }
 
@@ -637,6 +627,7 @@ DvD PMA::ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& c
 
     // Eliminate boundary rows and boundary columns
     SpD A11 = columnSpaceT * StiffnessMatrix * columnSpace;
+    DEBUG_PRINT("Stokes stiffness matrix: ", A11);
     // Eliminate boundary rows and free columns
     SpD A12 = columnSpaceT * StiffnessMatrix * nullSpace;
     // Eliminate boundary rows
@@ -644,15 +635,15 @@ DvD PMA::ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& c
 
     using namespace Eigen;
 
-    SparseLU<SpD,COLAMDOrdering<int>> solver;
-    solver.analyzePattern(A11);
-    FindRank(A11);
-    solver.factorize(A11);
-    DvD x = solver.solve(F11 - A12 * boundaryVals); 
+    // SparseLU<SpD,COLAMDOrdering<int>> solver;
+    // solver.analyzePattern(A11);
+    // FindRank(A11);
+    // solver.factorize(A11);
+    // DvD x = solver.solve(F11 - A12 * boundaryVals); 
 
-    // ConjugateGradient<SpD, Lower|Upper> cg;
-    // cg.compute(A11);
-    // DvD x = cg.solve(F11 - A12 * boundaryVals);
+    ConjugateGradient<SpD, Lower|Upper> cg;
+    cg.compute(A11);
+    DvD x = cg.solve(F11 - A12 * boundaryVals);
 
     x = columnSpace * x + nullSpace * boundaryVals;
     return x;
@@ -735,7 +726,6 @@ DvD PMA::PoissonSolve(QTM::QuadTreeMesh& inputMesh,
     // std::cout<<"right side (penalty): \n"<<B12<<std::endl;
 
     std::cout<<"Solving system with "<<freeNodes.size()<<" nodes"<<std::endl;
-    std::cout<<"F: "<<FMatrix<<std::endl;
     DvD x = PMA::ComputeSolutionStationaryLinear(StiffnessMatrix, FMatrix, columnSpace, nullSpace, boundaryVals);
     std::cout<<"System solved!"<<std::endl;
     return x;

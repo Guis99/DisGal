@@ -100,14 +100,57 @@ void GetExtensionMatrices(BasicMesh1D &inputMesh,
     columnSpace.setFromTriplets(tripletListCS.begin(), tripletListCS.end());
 }
 
+DvD getICVec(const BasicMesh1D& mesh, int nNodes, char* baseline, double cutoff, std::string IC) {
+    int stopIdx = 0;
+    std::vector<double> x; x.reserve(nNodes);
+
+    DEBUG_PRINT("X POS LOOP");
+    while (mesh.nodes[stopIdx].position <= cutoff && stopIdx < nNodes) { // if cutoff is greater than last position we assume no discon
+        // DEBUG_PRINT(mesh.nodes[stopIdx].position);
+        // DEBUG_PRINT(stopIdx);
+        x.push_back(mesh.nodes[stopIdx++].position); 
+        // DEBUG_PRINT("-------");
+    }
+
+    DEBUG_PRINT("ALL x");
+    for (auto vecElem : x) {
+        DEBUG_PRINT(vecElem);
+    }
+    // x is NOT the initial values, but the positions of each node
+    std::string ICMod = "(" + IC + ")+";
+    ICMod += baseline;
+    DEBUG_PRINT("ic string: ", ICMod);
+    std::vector<double> ICVec = Utils::EvalSymbolicBC1D(x.data(), stopIdx, ICMod);
+
+    for (auto vecElem : ICVec) {
+        DEBUG_PRINT(vecElem);
+    }
+
+    ICVec.reserve(nNodes);
+
+    double baselineD = std::stod(baseline);
+    for (stopIdx; stopIdx<nNodes; stopIdx++) {
+        ICVec.push_back(baselineD);
+    }
+
+    DEBUG_PRINT("extended");
+    for (auto vecElem : ICVec) {
+        DEBUG_PRINT(vecElem);
+    }
+
+    Eigen::Map<DvD> InitialCondition(ICVec.data(), nNodes, 1);
+    DvD out = ((DvD)InitialCondition);
+
+    return out;
+}
+
 std::vector<DvD> TimeStep::solver_RK4(SpD &A, 
                             SpD &columnSpace, SpD &nullSpace, 
-                            DvD &boundaryVals, 
                             DvD &initialCondition,
                             double timeStep,
                             int numTimeSteps) {
     std::vector<DvD> out; out.reserve(numTimeSteps);
-    out.push_back(columnSpace * initialCondition);
+    out.push_back(initialCondition);
     DvD prevState = initialCondition;
     DvD x;
     DvD k1; DvD k2; DvD k3; DvD k4;
@@ -120,7 +163,7 @@ std::vector<DvD> TimeStep::solver_RK4(SpD &A,
 
         x = prevState + (timeStep / 6) * (k1 + 2*k2 + 2*k3 + k4);
         prevState = x;
-        out.push_back(columnSpace * x);
+        out.push_back(x);
     }
 
     return out;
@@ -128,12 +171,11 @@ std::vector<DvD> TimeStep::solver_RK4(SpD &A,
 
 std::vector<DvD> TimeStep::solver_GL1(SpD &A, 
                             SpD &columnSpace, SpD &nullSpace, 
-                            DvD &boundaryVals, 
                             DvD &initialCondition,
                             double timeStep,
                             int numTimeSteps) {
     std::vector<DvD> out; out.reserve(numTimeSteps);
-    out.push_back(columnSpace * initialCondition);
+    out.push_back(initialCondition);
     DvD prevState = initialCondition;
     DvD x;
     DvD k1; DvD k2; DvD k3; DvD k4;
@@ -146,20 +188,19 @@ std::vector<DvD> TimeStep::solver_GL1(SpD &A,
 
         x = prevState + (timeStep / 6) * (k1 + 2*k2 + 2*k3 + k4);
         prevState = x;
-        out.push_back(columnSpace * x);
+        out.push_back(x);
     }
-
     return out;
 }
 
 std::vector<DvD> TimeStep::solver_GL2(SpD &A, 
                             SpD &columnSpace, SpD &nullSpace, 
-                            DvD &boundaryVals, 
                             DvD &initialCondition,
                             double timeStep,
                             int numTimeSteps) {
     std::vector<DvD> out; out.reserve(numTimeSteps);
-    out.push_back(columnSpace * initialCondition);
+    out.push_back(initialCondition);
+    DEBUG_PRINT("ic gl2 begin size: ",initialCondition.rows()," x ", initialCondition.cols());
     DvD prevState = initialCondition;
     DvD x;
 
@@ -195,19 +236,6 @@ std::vector<DvD> TimeStep::solver_GL2(SpD &A,
     SpD blockRow(n, 2*n);
     SpD blockA(2*n, 2*n);
     SpD blockCol(2*n, n);
-
-    // blockRow.block(0,0,n,n) = b1 * I_n;
-    // blockRow.block(0,n,n,n) = b2 * I_n;
-
-    // blockA.block(0, 0, n, n) = I_n - timeStep*a11*A;
-    // blockA.block(0, n, n, n) = -timeStep*a12*A;
-    // blockA.block(n, 0, n, n) = I_n - timeStep*a21*A;
-    // blockA.block(n, n, n, n) = -timeStep*a22*A;
-
-    // blockCol.block(0,0,n,n) = A;
-    // blockCol.block(n,0,n,n) = A;
-
-    std::cout<<"time2"<<std::endl;
 
     for (int i = 0; i < n; ++i) {
         for (int j = 0; j < n; ++j) {
@@ -286,8 +314,6 @@ std::vector<DvD> TimeStep::solver_GL2(SpD &A,
         }
     }
 
-    std::cout<<"time3"<<std::endl;
-
     // Finalize the matrices
     blockRow.makeCompressed();
     blockA.makeCompressed();
@@ -298,35 +324,27 @@ std::vector<DvD> TimeStep::solver_GL2(SpD &A,
     LuSolverMM.factorize(blockA);
 
     SpD blockA_Inv = LuSolverMM.solve(I_2n);
-    std::cout<<"time4"<<std::endl;
 
     SpD fPropOp = I_n + timeStep * blockRow * blockA_Inv * blockCol;
 
-    std::cout<<"time5"<<std::endl;
-
-    // std::cout<<"fPropOp: "<<fPropOp<<std::endl;
-    // std::cout<<"blockRow: "<<blockRow<<std::endl;
-    // std::cout<<"blockA: "<<blockA<<std::endl;
-    // std::cout<<"blockA_Inv: "<<blockA_Inv<<std::endl;
-    // std::cout<<"blockCol: "<<blockCol<<std::endl;
+    DEBUG_PRINT("fprop size: ",fPropOp.rows()," x ", fPropOp.cols());
+    DEBUG_PRINT("pstate size: ",prevState.rows()," x ", prevState.cols());
     
     for (int i=1; i<numTimeSteps; i++) {
         x = fPropOp * prevState;
         prevState = x;
-        out.push_back(columnSpace * x);
+        out.push_back(x);
     }
-    std::cout<<"time6"<<std::endl;
     return out;
 }
 
 std::vector<DvD> TimeStep::solver_GL2_nonlinear(SpD &A, 
                             SpD &columnSpace, SpD &nullSpace, 
-                            DvD &boundaryVals, 
                             DvD &initialCondition,
                             double timeStep,
                             int numTimeSteps) {
     std::vector<DvD> out; out.reserve(numTimeSteps);
-    out.push_back(columnSpace * initialCondition);
+    out.push_back(initialCondition);
     DvD prevState = initialCondition;
     DvD x;
     DvD k1; DvD k2; DvD k3; DvD k4;
@@ -358,7 +376,7 @@ std::vector<DvD> TimeStep::solver_GL2_nonlinear(SpD &A,
 
         x = prevState + (timeStep / 6) * (k1 + 2*k2 + 2*k3 + k4);
         prevState = x;
-        out.push_back(columnSpace * x);
+        out.push_back(x);
     }
 
     return out;
@@ -419,6 +437,7 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
         int rightVal = (elm.dofs).back(); 
         if (elm.ID == nElements - 1) {
             tripletListK.emplace_back(rightVal, rightVal, -1.0); // right boundary
+            tripletListK.emplace_back(0, rightVal, 1.0); // periodic boundary
         } else {
             tripletListK.emplace_back(rightVal, rightVal, -1.0); // upwind flux, outward jump
             tripletListK.emplace_back(rightVal + 1, rightVal, 1.0); // upwind flux, inward jump
@@ -430,16 +449,14 @@ void AssembleSystemMatrices(BasicMesh1D& mesh, SpD &MassMatrix, SpD &StiffnessMa
     StiffnessMatrix.setFromTriplets(tripletListK.begin(), tripletListK.end());
 }
 
-std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix, 
-                                SpD &MassMatrix, SpD &columnSpace, 
-                                SpD &nullSpace, DvD &boundaryVals, 
+std::vector<DvD> ComputeTransientSolution(SpD &K11, 
+                                SpD &M11, SpD &columnSpace, 
+                                SpD &nullSpace,  
                                 DvD &initialCondition,
                                 double timeStep,
                                 int numTimeSteps,
                                 int integrator) {
     // Eliminate boundary rows and columns
-    SpD K11 = columnSpace.transpose() * StiffnessMatrix * columnSpace;
-    SpD M11 = columnSpace.transpose() * MassMatrix * columnSpace;
 
     SpD combinedMats = M11 - timeStep * K11 / 2;
     int system_size = combinedMats.rows();
@@ -471,9 +488,11 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
     // std::cout<<"inverse"<<std::endl<<combinedMatsInv<<std::endl;
 
     std::vector<DvD> out;
-    out.push_back(columnSpace * initialCondition);
+    out.push_back(initialCondition);
     DvD prevState = initialCondition;
     DvD x;
+    DEBUG_PRINT("ic trasol begin size: ",initialCondition.rows()," x ", initialCondition.cols());
+
 
     switch (integrator) {
         case 0: // Forward Euler
@@ -481,13 +500,13 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
         case 1: // Crank-Nicholson
             break;
         case 2: // RK4
-            return TimeStep::solver_RK4(A, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
+            return TimeStep::solver_RK4(A, columnSpace, nullSpace, initialCondition, timeStep, numTimeSteps);
             break;
         case 3: // GL1
-            return TimeStep::solver_GL1(A, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
+            return TimeStep::solver_GL1(A, columnSpace, nullSpace, initialCondition, timeStep, numTimeSteps);
             break;
         case 4: // GL2
-            return TimeStep::solver_GL2(A, columnSpace, nullSpace, boundaryVals, initialCondition, timeStep, numTimeSteps);
+            return TimeStep::solver_GL2(A, columnSpace, nullSpace, initialCondition, timeStep, numTimeSteps);
             break;
     }
 
@@ -495,7 +514,7 @@ std::vector<DvD> ComputeTransientSolution(SpD &StiffnessMatrix,
     for (int i=1; i<numTimeSteps; i++) {
         x = combinedMatsInv * (M11 + timeStep * K11 / 2) * prevState;
         prevState = x;
-        out.push_back(columnSpace * x);
+        out.push_back(x);
     }
     return out;
 }

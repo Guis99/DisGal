@@ -1,1 +1,1 @@
-g++ .\Diffusion\mainTestPoissondG.cpp .\Diffusion\src\MatrixAssemblydG.cpp .\Diffusion\src\MatrixAssembly.cpp .\QTM\src\QTM.cpp .\QTM\src\Cell.cpp .\Dependencies\Utils\Utils.cpp -o Diffusion/main1.exe -O3
+g++ -fopenmp -DMULTITHREAD .\Diffusion\mainTestPoissondG.cpp .\Diffusion\src\MatrixAssemblydG.cpp .\Diffusion\src\MatrixAssembly.cpp .\QTM\src\QTM.cpp .\QTM\src\Cell.cpp .\Dependencies\Utils\Utils.cpp -o Diffusion\build\diffDG.exe -O3

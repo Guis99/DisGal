@@ -160,6 +160,7 @@ cython_debug/
 #.idea/
 ### VisualStudioCode ###
 .vscode/**
+./.vscode
 
 # Local History for Visual Studio Code
 .history/
@@ -367,8 +368,9 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 *exe
-/Dependencies/**
 *txt
 
 *.json
 
+!CMakeLists.txt
+!requirements.txt

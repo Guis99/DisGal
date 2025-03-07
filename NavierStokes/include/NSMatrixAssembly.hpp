@@ -1,4 +1,4 @@
-#include "..\..\Diffusion\include\MatrixAssembly.hpp"
+#include "../../Diffusion/include/MatrixAssembly.hpp"
 
 #ifndef MatrixAssembly_NS
 #define MatrixAssembly_NS
@@ -9,6 +9,9 @@ namespace NSMA {
     // "proper" formulation
     SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir); // c3i
     SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir); // bi3
+
+    SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::quadUtils& package);
+    SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package);
 
     // "bad" formulation
     SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
@@ -64,16 +67,8 @@ namespace NSMA {
                     std::vector<std::string> Vbcs,
                     std::vector<std::string> Pbcs,
                     double penaltyParam);
-}
-
+                    
+    
 // Compressible
-
-
-
-
-
-
-
-
-
 #endif
+}
