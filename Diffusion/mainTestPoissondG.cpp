@@ -8,11 +8,14 @@ using namespace QTM;
 
 int main(int argc, char* argv[]) {
     #ifdef MULTITHREAD
+    std::cout<<"multithreading"<<std::endl;
+    #endif
+
+
         uint64_t numThreads = std::stoi(argv[argc-1]);
         Eigen::setNbThreads(numThreads);
         std::cout << "using " << numThreads << " threads" << std::endl;
-    #endif
-
+   
     int nx;
     int ny;
     int deg;
