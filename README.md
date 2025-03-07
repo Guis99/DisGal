@@ -20,6 +20,7 @@ Requirements:
 At the moment, only the code in the "Diffusion" subdirectory is available to run. First, clone this repository via a method of your choice. Once done, run 
 
 ```
+cd DisGal
 git submodule update --init --recursive
 ```
 
@@ -32,7 +33,7 @@ Then, cd into the repository folder and please follow the below platform-specifi
 - Run the following commands in your terminal:
 
 ```
-cd DisGal/Diffusion
+cd Diffusion
 mkdir build
 ```
 
@@ -52,7 +53,7 @@ cd ..
 - Run the following commands in your terminal:
 
 ```
-cd DisGal\Diffusion
+cd Diffusion
 mkdir build
 cd ..
 ``
