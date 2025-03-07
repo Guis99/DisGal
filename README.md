@@ -26,7 +26,7 @@ git submodule update --init --recursive
 
 from the terminal to load dependencies. 
 
-Then, cd into the repository folder and please follow the below platform-specific instructions:
+Then, please follow the below platform-specific instructions:
 
 # Platform-specific instructions
 ## Linux (x86) and Mac (ARM)
@@ -56,7 +56,7 @@ cd ..
 cd Diffusion
 mkdir build
 cd ..
-``
+```
 
 At this point, you can choose to enable/disable multithreading. To do so, open CMakeLists.txt and either remove or keep the '-fopenmp' and '-DMULTITHREAD' in the batch file called 'buildPoisson_dG.bat'
 
