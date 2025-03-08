@@ -8,19 +8,28 @@
 #ifndef MatrixAssembly_diff
 #define MatrixAssembly_diff
 
+
+#ifndef VARPRINT
+#define VARPRINT
+template<typename... Args>
+void var_print(Args&&... args) {
+    (std::cout << ... << args) << std::endl; // Fold expression to print all arguments
+}
+#endif
+
+#ifdef MULTITHREAD
+    #define CONFIRM_MT(numThreads) var_print("Multithreading active. Using ", numThreads, " threads")
+    #define MT_ACTIVE 1
+#else
+    #define CONFIRM_MT(numThreads)
+    #define MT_ACTIVE 0
+#endif
+
 typedef Eigen::SparseMatrix<double> SpD;
 // Dynamically-sized matrix of doubles
 typedef Eigen::MatrixXd DD;
 // Dynamically-sized vector of doubles
 typedef Eigen::VectorXd DvD;
-
-#ifdef MULTITHREAD
-#define CONFIRM_MT(numThreads) debug_print("Multithreading active. Using ", numThreads, " threads")
-#define MT_ACTIVE 1
-#else
-#define CONFIRM_MT(numThreads)
-#define MT_ACTIVE 0
-#endif
 
 namespace PMA { // PMA = Poisson Matrix Assembly
 

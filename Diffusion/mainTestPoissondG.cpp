@@ -8,8 +8,6 @@ using namespace QTM;
 
 int main(int argc, char* argv[]) {
 
-    DEBUG_PRINT("db");
-
     uint64_t numThreads = std::stoi(argv[argc-1]);
    
     int nx;
