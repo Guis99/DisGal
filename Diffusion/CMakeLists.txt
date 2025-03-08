@@ -13,7 +13,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-value -Wno-switch -O3 -DVERB
 if(APPLE)
     set(CMAKE_C_COMPILER /usr/bin/clang)
     set(CMAKE_CXX_COMPILER /usr/bin/clang++)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-value -Wno-switch -O3 -DVERBOSE -std=c++17 -stdlib=libc++")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++")
 elseif(UNIX)
     set(CMAKE_C_COMPILER /usr/bin/gcc)
     set(CMAKE_CXX_COMPILER /usr/bin/g++)

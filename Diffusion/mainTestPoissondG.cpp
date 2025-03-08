@@ -7,14 +7,10 @@
 using namespace QTM;
 
 int main(int argc, char* argv[]) {
-    #ifdef MULTITHREAD
-    std::cout<<"multithreading"<<std::endl;
-    #endif
 
+    DEBUG_PRINT("db");
 
-        uint64_t numThreads = std::stoi(argv[argc-1]);
-        Eigen::setNbThreads(numThreads);
-        std::cout << "using " << numThreads << " threads" << std::endl;
+    uint64_t numThreads = std::stoi(argv[argc-1]);
    
     int nx;
     int ny;
@@ -90,7 +86,7 @@ int main(int argc, char* argv[]) {
     double c = 1;
     double k = 1;
 
-    DvD z = PMA::dgPoissonSolve(mesh, k, source, essentialBC, naturalBC, dbcs, nbcs, penalty, 0);
+    DvD z = PMA::dgPoissonSolve(mesh, k, source, essentialBC, naturalBC, dbcs, nbcs, penalty, 0, numThreads);
 
     std::vector<std::array<double,2>> allNodePos = mesh.nodePositions;
 

@@ -5,16 +5,22 @@
 #include "../../Utils/Utils.hpp"
 // #include "..\..\Meshing\Meshing.hpp"
 
-
 #ifndef MatrixAssembly_diff
 #define MatrixAssembly_diff
-
 
 typedef Eigen::SparseMatrix<double> SpD;
 // Dynamically-sized matrix of doubles
 typedef Eigen::MatrixXd DD;
 // Dynamically-sized vector of doubles
 typedef Eigen::VectorXd DvD;
+
+#ifdef MULTITHREAD
+#define CONFIRM_MT(numThreads) debug_print("Multithreading active. Using ", numThreads, " threads")
+#define MT_ACTIVE 1
+#else
+#define CONFIRM_MT(numThreads)
+#define MT_ACTIVE 0
+#endif
 
 namespace PMA { // PMA = Poisson Matrix Assembly
 
@@ -96,7 +102,8 @@ DvD dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
                 std::vector<std::string> dbcs,
                 std::vector<std::string> nbcs,
                 double penaltyParam,
-                double dirichletPenalty);
+                double dirichletPenalty,
+                uint64_t numThreads);
 
 double dgComputeResidual(QTM::QuadTreeMesh& inputMesh,
                 double k,

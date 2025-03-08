@@ -12,14 +12,14 @@ import Utils
 toRun = Utils.getExecutableName("diffDG")
 
 
-printflag = True # toggles plotting of data
+printflag = False # toggles plotting of data
 
 
-numThreads = 1 # change for multithreading
+numThreads = 30 # change for multithreading
 
 # discretization parameters
-deg = 2 # order of approximation
-div = 50 # number of elements in 1D
+deg = 1 # order of approximation
+div = 4 # number of elements in 1D
 Lx = 1 # size of domain
 Ly = 1
 meshInfo = [str(deg), str(div), str(div), str(Lx), str(Ly)] # pack into list of strings
