@@ -10,6 +10,8 @@ $$ \underset{q\in Q}{\text{inf}} \,\, \underset{v\in V}{\text{sup}} \frac{b(v,q)
 
 # Running locally
 
+![alt-text](https://github.com/Guis99/DisGal/blob/main/photos/usage.png)
+
 Requirements:
 - A supported C++ compiler
 - CMake (non-windows)
