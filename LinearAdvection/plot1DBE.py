@@ -38,10 +38,11 @@ cutoff = 10.
 # initialCondition = "x"
 
 osName = platform.system()
-if osName == "darwin" or osName.startswith("linux"):
-    toRun = "./build/Adv1DBE"
+print(osName)
+if osName == "Darwin" or osName.startswith("linux"):
+    toRun = "./build/Adv1D"
 elif osName == "windows":
-    toRun = "./build/Adv1DBE.exe"
+    toRun = "./build/Adv1D.exe"
 
 
 subprocess.run([toRun, *meshInfo, initialCondition, str(timeLength), 

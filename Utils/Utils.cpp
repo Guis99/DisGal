@@ -1,8 +1,7 @@
 #include "Utils.hpp"
-#include "../Dependencies/MathParser/MathParser.hpp"
 
-std::vector<double> Utils::genGaussPoints(int degree) {
-    std::vector<double> gaussPoints;
+std::vector<Real_b> Utils::genGaussPoints(int degree) {
+    std::vector<Real_b> gaussPoints;
     gaussPoints.reserve(degree+1);
 
     for (int i=0; i < degree+1; i++) {
@@ -12,18 +11,18 @@ std::vector<double> Utils::genGaussPoints(int degree) {
     return gaussPoints;
 }
 
-std::vector<double> Utils::evalLagrangeInterp(int k, std::vector<double> evalPoints, std::vector<double> &gaussPoints) {
+std::vector<Real_b> Utils::evalLagrangeInterp(int k, std::vector<Real_b> evalPoints, std::vector<Real_b> &gaussPoints) {
     // Evaluate the kth Lagrange interpolant at the given locations
     int nNodes = gaussPoints.size();
     int nPoints = evalPoints.size();
 
-    std::vector<double> out;
+    std::vector<Real_b> out;
     out.reserve(nPoints);  
 
-    double curr;
+    Real_b curr;
     for (int i = 0; i < nPoints; i++) {
         curr = 1.0;
-        double point = evalPoints[i];
+        Real_b point = evalPoints[i];
         for (int j = 0; j < nNodes; j++) {
             if (j != k) {
             curr *= (point-gaussPoints[j])/(gaussPoints[k]-gaussPoints[j]);
@@ -35,20 +34,20 @@ std::vector<double> Utils::evalLagrangeInterp(int k, std::vector<double> evalPoi
     return out;
 }
 
-std::vector<double> Utils::numDeriv(double h, int k, std::vector<double>& evalPoints, std::vector<double>& gaussPoints) {
+std::vector<Real_b> Utils::numDeriv(Real_b h, int k, std::vector<Real_b>& evalPoints, std::vector<Real_b>& gaussPoints) {
     // Fourth-order four-point derivative approximation given by
     // (-f(x + 2h) + 8f(x + h) − 8f(x -h) + f(x 2h))/12h
 
     // use step size h <= .001 for best results
 
-    std::vector<double> out;
+    std::vector<Real_b> out;
     out.reserve(evalPoints.size());
-    double denom = 12*h;
+    Real_b denom = 12*h;
 
     for (int i = 0; i < evalPoints.size(); i++) {
-        double currPoint = evalPoints[i];
-        std::vector<double> centeredPoints = {currPoint+2*h,currPoint+h,currPoint-h,currPoint-2*h};
-        std::vector<double> funcVals = Utils::evalLagrangeInterp(k, centeredPoints, gaussPoints);
+        Real_b currPoint = evalPoints[i];
+        std::vector<Real_b> centeredPoints = {currPoint+2*h,currPoint+h,currPoint-h,currPoint-2*h};
+        std::vector<Real_b> funcVals = Utils::evalLagrangeInterp(k, centeredPoints, gaussPoints);
 
         out.push_back((-funcVals[0]+8*funcVals[1]-8*funcVals[2]+funcVals[3])/denom);
     }
@@ -56,23 +55,23 @@ std::vector<double> Utils::numDeriv(double h, int k, std::vector<double>& evalPo
     return out;
 }
 
-std::vector<double> Utils::numDeriv2(double h, int k, std::vector<double>& evalPoints, std::vector<double>& gaussPoints) {
+std::vector<Real_b> Utils::numDeriv2(Real_b h, int k, std::vector<Real_b>& evalPoints, std::vector<Real_b>& gaussPoints) {
     // 4th-order centered second derivative given by 
     // (-f(x + 2h) + 16f(x + h) - 30f(x) + 16f(x - h) - f(x - 2h))/(12h^2)
 
     // use step size h <= .001 for best results
     if (gaussPoints.size() == 2) {
-        std::vector<double> out(2,0);
+        std::vector<Real_b> out(2,0);
         return out;            
     }
-    std::vector<double> out;
+    std::vector<Real_b> out;
     out.reserve(evalPoints.size());
-    double denom = 12*h*h;
+    Real_b denom = 12*h*h;
 
     for (int i = 0; i < evalPoints.size(); i++) {
-        double currPoint = evalPoints[i];
-        std::vector<double> centeredPoints = {currPoint+2*h,currPoint+h,currPoint,currPoint-h,currPoint-2*h};
-        std::vector<double> funcVals = Utils::evalLagrangeInterp(k, centeredPoints, gaussPoints);
+        Real_b currPoint = evalPoints[i];
+        std::vector<Real_b> centeredPoints = {currPoint+2*h,currPoint+h,currPoint,currPoint-h,currPoint-2*h};
+        std::vector<Real_b> funcVals = Utils::evalLagrangeInterp(k, centeredPoints, gaussPoints);
 
         out.push_back((-funcVals[0]+16*funcVals[1]-30*funcVals[2]+16*funcVals[3]-funcVals[4])/denom);
     }
@@ -80,29 +79,29 @@ std::vector<double> Utils::numDeriv2(double h, int k, std::vector<double>& evalP
     return out;
 }
 
-std::vector<double> Utils::integrateLagrange(std::vector<double> &gaussPoints) {
+std::vector<Real_b> Utils::integrateLagrange(std::vector<Real_b> &gaussPoints) {
     // Integrates given basis polynomials with Simpson's rule
     int nInt = gaussPoints.size();
 
-    std::vector<double> evalPoints;
-    std::vector<double> out;
+    std::vector<Real_b> evalPoints;
+    std::vector<Real_b> out;
     int numDiv = 1000;
-    double h = 2/double(numDiv);
+    Real_b h = 2/Real_b(numDiv);
 
     evalPoints.resize(numDiv);
     out.reserve(nInt);
 
-    double currLoc = -1;
+    Real_b currLoc = -1;
     for (int i = 0; i < numDiv; i++) {
         evalPoints[i] = currLoc;
         currLoc += h;
     }
     evalPoints.push_back(1);
 
-    double currInt;
+    Real_b currInt;
     for (int k = 0; k < nInt; k++) {
         currInt = 0.0;
-        std::vector<double> vals = Utils::evalLagrangeInterp(k, evalPoints, gaussPoints);
+        std::vector<Real_b> vals = Utils::evalLagrangeInterp(k, evalPoints, gaussPoints);
         for (int i = 0; i < evalPoints.size()-2; i+=2) {
             currInt += h*(vals[i]+4*vals[i+1]+vals[i+2]);
         }
@@ -112,7 +111,7 @@ std::vector<double> Utils::integrateLagrange(std::vector<double> &gaussPoints) {
     return out;
 }
 
-std::vector<double> Utils::ReshuffleNodeVals(std::vector<int> RmOrder, std::vector<int> CwOrder, std::vector<double> shuffleArray) {
+std::vector<Real_b> Utils::ReshuffleNodeVals(std::vector<int> RmOrder, std::vector<int> CwOrder, std::vector<Real_b> shuffleArray) {
     int numObjs = CwOrder.size();
     std::vector<int> shuffledIdxs;
     shuffledIdxs.reserve(numObjs);
@@ -132,7 +131,7 @@ std::vector<double> Utils::ReshuffleNodeVals(std::vector<int> RmOrder, std::vect
         shuffledIdxs.push_back(mid);
     }
 
-    std::vector<double> out;
+    std::vector<Real_b> out;
     out.resize(numObjs);
     for (int i=0; i<numObjs; i++) {
         out[shuffledIdxs[i]] = shuffleArray[i];
@@ -141,38 +140,7 @@ std::vector<double> Utils::ReshuffleNodeVals(std::vector<int> RmOrder, std::vect
     return out;
 }
 
-std::vector<double> Utils::EvalSymbolicBC(double* startpoint, int allocSize, std::string prompt) {
-
-    MathParser::QA x;
-    x.reserve(allocSize);
-
-    for (int i=0; i<allocSize; i++) {
-        auto coord = *(startpoint+i);
-        x.push_back(*(startpoint+i));
-    }
-
-    MathParser::InitMaps();
-    MathParser::SetVariable("x", x);
-
-    std::string str;
-    std::cout<<prompt<<": ";
-    std::getline(std::cin,str);
-    std::cout<<std::endl;
-    auto result = MathParser::ParseText(str);
-    
-    std::vector<double> out;
-
-    if (result.size() == x.size()) {
-        out = result.release();
-    }
-    else {
-        out = std::vector<double>(x.size(), result.release()[0]);
-    }
-
-    return out;
-}
-
-std::vector<double> Utils::EvalSymbolicBC1D(double* startpoint, int allocSize, std::string evalString) {
+std::vector<Real_b> Utils::EvalSymbolicBC1D(Real_b* startpoint, int allocSize, std::string evalString) {
 
     MathParser::QA x;
     x.reserve(allocSize);
@@ -188,19 +156,19 @@ std::vector<double> Utils::EvalSymbolicBC1D(double* startpoint, int allocSize, s
     std::cout<<std::endl;
     auto result = MathParser::ParseText(evalString);
     
-    std::vector<double> out;
+    std::vector<Real_b> out;
 
     if (result.size() == x.size()) {
         out = result.release();
     }
     else {
-        out = std::vector<double>(x.size(), result.release()[0]);
+        out = std::vector<Real_b>(x.size(), result.release()[0]);
     }
 
     return out;
 }
 
-std::vector<double> Utils::EvalSymbolicBC(std::array<double,2>* startpoint, int allocSize, std::string evalString) {
+std::vector<Real_b> Utils::EvalSymbolicBC(std::array<Real_b,2>* startpoint, int allocSize, std::string evalString) {
     MathParser::QA x;
     MathParser::QA y;
 
@@ -218,51 +186,33 @@ std::vector<double> Utils::EvalSymbolicBC(std::array<double,2>* startpoint, int 
 
     auto result = MathParser::ParseText(evalString);
     
-    std::vector<double> out;
+    std::vector<Real_b> out;
 
     if (result.size() == x.size()) {
         out = result.release();
     }
     else {
-        out = std::vector<double>(x.size(), result.release()[0]);
+        out = std::vector<Real_b>(x.size(), result.release()[0]);
     }
 
     return out;
 }
 
-double Utils::TransformPoint(double x, double a, double b) {
-    double result = a + ((b - a) / 2.0) * (x + 1.0);
+Real_b Utils::TransformPoint(Real_b x, Real_b a, Real_b b) {
+    Real_b result = a + ((b - a) / 2.0) * (x + 1.0);
     return result;
 }
 
-std::array<double, 2> Utils::GetNormalVector(std::array<double, 2> &pos1, std::array<double, 2> &pos2) {
+std::array<Real_b, 2> Utils::GetNormalVector(std::array<Real_b, 2> &pos1, std::array<Real_b, 2> &pos2) {
     auto xdiff = pos2[0]-pos1[0];
     auto ydiff = pos2[1]-pos1[1];
-    double vecNorm = std::sqrt(std::pow(xdiff,2) + std::pow(ydiff,2));
+    Real_b vecNorm = std::sqrt(std::pow(xdiff,2) + std::pow(ydiff,2));
 
-    std::array<double,2> out;
+    std::array<Real_b,2> out;
     out[0] = -ydiff / vecNorm;
     out[1] = xdiff / vecNorm;
 
     return out;
-}
-
-void Utils::printVec(std::vector<double> in) {
-    std::cout<<"--------BEGIN VECTOR---------"<<std::endl;
-    std::cout<<"vector size: "<< in.size()<<std::endl;
-    for (double d : in) {
-        std::cout<<d<<std::endl;
-    }
-    std::cout<<"---------END VECTOR--------"<<std::endl;
-}
-
-void Utils::printVec(std::vector<int> in) {
-    std::cout<<"--------BEGIN VECTOR---------"<<std::endl;
-    std::cout<<"vector size: "<< in.size()<<std::endl;
-    for (double d : in) {
-        std::cout<<d<<std::endl;
-    }
-    std::cout<<"---------END VECTOR--------"<<std::endl;
 }
 
 std::vector<int> Utils::GetBoundaryNodes(std::vector<int>& localElemNodes, std::vector<int>& offsets, int boundarySize) {

@@ -34,15 +34,19 @@ numBoundaries = 4
 
 btm = {"1":"0", "0":"1"} # if bc is not one, it has to be the other
 
-
-ess = ["1","1","1","1"] # "1" means that a boundary is Dirichlet (essential), "0" means that it is Neumann (natural)
-ess = ["1","0","1","0"]
+ess = ["0","1","0","1"]
 nat = [btm[bc] for bc in ess]
 
 # dirichletBC = ["sin(5*pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]
 # neumannBC = ["0", "0", "0", "0"]
 
-dirichletBC = ["2","0","5","0"]
+b1 = 2
+b2 = 5
+
+c1 = (b2 - b1 + .5 * 3 * Lx * Lx) / Lx
+c2 = b1
+
+dirichletBC = ["0",str(b2),"0",str(b1)]
 neumannBC = ["0","0","0","0"]
 
 dirichletBC_trimmed = [dirichletBC[i] for i in range(numBoundaries) if ess[i] == "1"]
@@ -77,35 +81,38 @@ if printflag:
     yi = np.linspace(min(y), max(y), 100)
     xi, yi = np.meshgrid(xi, yi)
 
+    analyticali = -.5 * 3 * xi * xi + c1 * xi + c2
+
     # Interpolate z values on the grid
     zi = griddata((x, y), z, (xi, yi), method='cubic')
 
+    norm = np.sqrt(np.sum((zi-analyticali)**2))
+    print(f"error norm: {norm}")
+
     print("Plotting data")
     # Plot contour
-    fig,ax=plt.subplots()
-    plt.contourf(xi, yi, zi, levels=15, cmap=plt.cm.jet)
-    plt.colorbar()  # Show color scale
-    # plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
-    plt.xlabel('X')
-    plt.ylabel('Y')
-    plt.title('Contour plot')
+    # fig,ax=plt.subplots()
+    # plt.contourf(xi, yi, analyticali-zi, levels=15, cmap=plt.cm.jet)
+    # plt.colorbar()  # Show color scale
+    # # plt.scatter(x, y, c=z, cmap=plt.cm.jet)  # Optionally, plot your original data points on top
+    # plt.xlabel('X')
+    # plt.ylabel('Y')
+    # plt.title('Contour plot')
 
-    print("Plotting quadtree")
-    with open("quadtreedG.json", 'r') as f:
-        quadtree = json.load(f)
+    # print("Plotting quadtree")
+    # with open("quadtreedG.json", 'r') as f:
+    #     quadtree = json.load(f)
 
-        draw_cell_nr(quadtree, ax)
-        plt.axis('equal')
+    #     draw_cell_nr(quadtree, ax)
+    #     plt.axis('equal')
 
 
-    fig2 = plt.figure(figsize =(14, 9))
-    ax2 = plt.axes(projection ='3d')
+    # fig2 = plt.figure(figsize =(14, 9))
+    # ax2 = plt.axes(projection ='3d')
     
-    # Creating plot
-    ax2.plot_surface(xi, yi, zi)
-    ax2.set_xlabel('x')
+    # # Creating plot
+    # ax2.plot_surface(xi, yi, zi)
+    # ax2.set_xlabel('x')
 
 
-    plt.show()
-
-
+    # plt.show()

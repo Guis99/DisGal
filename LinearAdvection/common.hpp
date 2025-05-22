@@ -6,16 +6,17 @@
 #include <fstream>
 #include <functional>
 
-#ifndef DEBUGPRINT
-// Helper function to handle variadic arguments
+#ifndef VARPRINT
+#define VARPRINT
 template<typename... Args>
-void debug_print(Args&&... args) {
+void var_print(Args&&... args) {
     (std::cout << ... << args) << std::endl; // Fold expression to print all arguments
 }
+#endif
 
-// Define the DEBUG_PRINT macro
+#ifndef DEBUG_PRINT
 #ifdef VERBOSE
-#define DEBUG_PRINT(...) debug_print(__VA_ARGS__)
+#define DEBUG_PRINT(...) var_print(__VA_ARGS__)
 #else
 #define DEBUG_PRINT(...)
 #endif

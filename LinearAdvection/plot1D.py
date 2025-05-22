@@ -25,17 +25,18 @@ integrators = {"Forward Euler": 0, "Crank-Nicholson": 1, "RK4": 2, "GL1": 3, "GL
 integratorIdx = "Crank-Nicholson"
 integratorIdx = "GL2"
 baseline = 1.
-cutoff = 1. # feel free to set this arbitrarily high when you want IC to span whole domain
+cutoff = 2. # feel free to set this arbitrarily high when you want IC to span whole domain
 
 meshInfo = [str(deg), str(div), str(Lx)] # pack into list of strings
 
 initialCondition = "-((4 * x - 1) ^ 20 - 1)* .75"
 initialCondition = "2*x - .5"
 initialCondition = "1"
+initialCondition = "sin(4*pi*x)"
 # initialCondition = "x"
 
 osName = platform.system()
-if osName == "darwin" or osName.startswith("linux"):
+if osName == "Darwin" or osName.startswith("linux"):
     toRun = "./build/Adv1D"
 elif osName == "windows":
     toRun = "./build/Adv1D.exe"

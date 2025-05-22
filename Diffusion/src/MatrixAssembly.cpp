@@ -1,11 +1,11 @@
 #include "../include/MatrixAssembly.hpp"
 #include "../../Dependencies/Eigen/SVD"
 
-DD PMA::GenerateQuadWeights(std::vector<double> &gpX, std::vector<double> &gpY, int numXNodes, int numYNodes, int numElemNodes) {
+DD PMA::GenerateQuadWeights(std::vector<Real_b> &gpX, std::vector<Real_b> &gpY, int numXNodes, int numYNodes, int numElemNodes) {
     // Generate quadrature weight matrices
     // Get integrals of basis functions
-    std::vector<double> integX = Utils::integrateLagrange(gpX);
-    std::vector<double> integY = Utils::integrateLagrange(gpY);
+    std::vector<Real_b> integX = Utils::integrateLagrange(gpX);
+    std::vector<Real_b> integY = Utils::integrateLagrange(gpY);
 
     Eigen::Map<DvD> integXMat(integX.data(),numXNodes);
     Eigen::Map<DvD> integYMat(integY.data(),numYNodes);
@@ -17,24 +17,24 @@ DD PMA::GenerateQuadWeights(std::vector<double> &gpX, std::vector<double> &gpY, 
 }
 
 
-SpD PMA::StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
+SpD PMA::StiffnessMatrix(QTM::QuadTreeMesh& mesh, Real_b k) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
     
-    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<Real_b> gaussPoints = Utils::genGaussPoints(deg);
 
     // Generate derivative matrix
-    std::vector<double> AInitializer; 
+    std::vector<Real_b> AInitializer; 
     AInitializer.reserve(numElemNodes * numElemNodes);
 
-    double *AInitIdx = AInitializer.data(); 
+    Real_b *AInitIdx = AInitializer.data(); 
 
     // Generate derivatives for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
-        std::vector<double> xPartials = Utils::numDeriv(.00001, k, gaussPoints, gaussPoints);
+        std::vector<Real_b> xPartials = Utils::numDeriv(.00001, k, gaussPoints, gaussPoints);
         std::copy(xPartials.begin(), xPartials.end(), AInitIdx);
         AInitIdx += numNodes;
     }
@@ -53,7 +53,7 @@ SpD PMA::StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
     DD combinedY(numElemNodes, numElemNodes);
     combinedY << Eigen::kroneckerProduct(A, B);
     // Initialize i,j,v triplet list for sparse matrix
-    std::vector<Eigen::Triplet<double>> tripletList;
+    std::vector<Eigen::Triplet<Real_b>> tripletList;
     tripletList.reserve(nElements * numElemNodes * numElemNodes);
 
     auto combineXT = (DD)combinedX.transpose();
@@ -92,7 +92,7 @@ SpD PMA::StiffnessMatrix(QTM::QuadTreeMesh& mesh, double k) {
     return mat;
 }
 
-SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::quadUtils& package) {
+SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, Real_b k, Real_b alpha, PMA::quadUtils& package) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
@@ -121,7 +121,7 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
     DD B; B.setIdentity(numElemNodes, numElemNodes);
 
     // get basis func vals for split cell quad
-    std::vector<double> BhInitializer; 
+    std::vector<Real_b> BhInitializer; 
     BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // get unit vecs
@@ -140,7 +140,7 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
     std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
 
     auto leaves = mesh.leaves;
-    double a; // penalty parameters
+    Real_b a; // penalty parameters
 
     std::vector<int> boundaryNodes;
     std::vector<int> neighborNodes;
@@ -148,7 +148,7 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
     std::vector<int> elemNodes;
     std::vector<int> elemLocals;
     std::vector<std::shared_ptr<QTM::Cell>> neighbors;
-    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    std::vector<Eigen::Triplet<Real_b>> tripletList; tripletList.reserve(nNodes);
 
     for (auto &elm : leaves) {
         elemNodes = mesh.GetGlobalElemNodes(elm->CID);
@@ -173,7 +173,7 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
             // }
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
-                double jac;
+                Real_b jac;
                 if (!neighbor) { // skip exterior edges
                     // std::cout<<"here7"<<std::endl;
                     continue;
@@ -237,16 +237,16 @@ SpD PMA::PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::qua
     return mat;
 }
 
-SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) {
+SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, Real_b k, PMA::quadUtils& package) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = mesh.numElemNodes;
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
-    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<Real_b> gaussPoints = Utils::genGaussPoints(deg);
 
     // get quad weights in 1D
-    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+    std::vector<Real_b> integX = Utils::integrateLagrange(gaussPoints);
 
     // load package data
     DD quadWeights1D = package.quadWeights1D;
@@ -272,12 +272,12 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
     // DD Bs; Bs.setIdentity(numNodes, numNodes);
 
     // // Generate derivative matrix
-    // std::vector<double> AInitializer; 
+    // std::vector<Real_b> AInitializer; 
     // AInitializer.reserve(numNodes * numNodes);
 
     // // Generate derivatives for each basis function, copy to full array
     // for (int k=0; k<numNodes; k++) { 
-    //     std::vector<double> xPartials = Utils::numDeriv(.00001, k, gaussPoints, gaussPoints);
+    //     std::vector<Real_b> xPartials = Utils::numDeriv(.00001, k, gaussPoints, gaussPoints);
     //     AInitializer.insert(AInitializer.end(), xPartials.begin(), xPartials.end());
     // }
     
@@ -290,7 +290,7 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
     // combinedY << Eigen::kroneckerProduct(A, Bs);
 
     // // get basis func vals for split cell quad
-    // std::vector<double> BhInitializer; 
+    // std::vector<Real_b> BhInitializer; 
     // BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // // get unit vecs
@@ -304,7 +304,7 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
 
     // // Generate values for each basis function, copy to full array
     // for (int k=0; k<numNodes; k++) { 
-    //     std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
+    //     std::vector<Real_b> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
     //     BhInitializer.insert(BhInitializer.end(), xVals.begin(), xVals.end());
     // }
 
@@ -321,12 +321,12 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
     // splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
 
     // // get basis func gradients for split cell quad
-    // std::vector<double> AhInitializer; 
+    // std::vector<Real_b> AhInitializer; 
     // AhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // // Generate derivatives for each basis function, copy to full array
     // for (int k=0; k<numNodes; k++) { 
-    //     std::vector<double> xPartials = Utils::numDeriv(.00001, k, mesh.halfGaussPoints, gaussPoints);
+    //     std::vector<Real_b> xPartials = Utils::numDeriv(.00001, k, mesh.halfGaussPoints, gaussPoints);
     //     AhInitializer.insert(AhInitializer.end(), xPartials.begin(), xPartials.end());
     // }
     
@@ -361,8 +361,8 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
 
     std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
 
-    double normalX[4] = {0,1,0,-1};
-    double normalY[4] = {1,0,-1,0};
+    Real_b normalX[4] = {0,1,0,-1};
+    Real_b normalY[4] = {1,0,-1,0};
 
     std::vector<int> boundaryNodes;
     std::vector<int> neighborNodes;
@@ -370,7 +370,7 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
     std::vector<int> elemNodes;
     std::vector<int> elemLocals;
     std::vector<std::shared_ptr<QTM::Cell>> neighbors;
-    std::vector<Eigen::Triplet<double>> tripletList; tripletList.reserve(nNodes);
+    std::vector<Eigen::Triplet<Real_b>> tripletList; tripletList.reserve(nNodes);
     auto leaves = mesh.GetAllCells();
                                                 
     for (auto &elm : leaves) {
@@ -382,8 +382,8 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
             QTM::Direction oppdir = oppdirs[dir];
             for (int NI = 0; NI < neighbors.size(); NI++) { 
                 auto neighbor = neighbors[NI];
-                double jac;
-                double fac;
+                Real_b jac;
+                Real_b fac;
                 if (!neighbor) { // skip exterior edges
                     continue;
                 }
@@ -452,13 +452,13 @@ SpD PMA::FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package) 
     return mat;
 }
 
-DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
+DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, Real_b f, std::string evalStr) {
     int deg = mesh.deg;
     int numNodes = deg+1;
     int numElemNodes = numNodes * numNodes;
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
-    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<Real_b> gaussPoints = Utils::genGaussPoints(deg);
 
     // Generate quadrature weight matrices
     DD weightMat = PMA::GenerateQuadWeights(gaussPoints, gaussPoints, numNodes, numNodes, numElemNodes);
@@ -466,22 +466,22 @@ DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     // Turn weight mat int vector and mult. by source since diagonal
     // DvD sourceVec = f * weightMat.diagonal();
 
-    auto allNodesPos = mesh.AllNodePos();
-    auto startpoint = allNodesPos.data(); auto allocSize = allNodesPos.size();
-    auto fEval = Utils::EvalSymbolicBC(startpoint, allocSize, evalStr);
+    std::vector<std::array<Real_b,2>> allNodesPos = mesh.AllNodePos();
+    std::array<Real_b,2>* startpoint = allNodesPos.data(); auto allocSize = allNodesPos.size();
+    std::vector<Real_b> fEval = Utils::EvalSymbolicBC(startpoint, allocSize, evalStr);
 
     // Initialize i,j,v triplet list for sparse matrix
-    std::vector<Eigen::Triplet<double>> tripletList;
+    std::vector<Eigen::Triplet<Real_b>> tripletList;
     tripletList.reserve(nElements * numElemNodes);
 
     // Integrate over all elements
     DvD localElemMat(numElemNodes);
     auto leaves = mesh.GetAllCells();
     for (auto &elm : leaves) {
-        double jac = elm->width; // Jacobian factors
+        Real_b jac = elm->width; // Jacobian factors
         // calculate local matrix
         auto nodes = elm->nodes;
-        std::vector<double> collectSourceVals; collectSourceVals.reserve(numElemNodes);
+        std::vector<Real_b> collectSourceVals; collectSourceVals.reserve(numElemNodes);
         collectSourceVals.insert(collectSourceVals.begin(), fEval.begin()+nodes[0], fEval.begin()+nodes[1]+1);
         // for (int i=nodes[0]; i<=nodes[1]; i++) {
         //     collectSourceVals.push_back(fEval[i]);
@@ -506,8 +506,8 @@ DvD PMA::AssembleFVec(QTM::QuadTreeMesh& mesh, double f, std::string evalStr) {
     return out;
 }
 
-std::vector<double> PMA::ComputeResiduals(QTM::QuadTreeMesh& mesh, DvD& solution, SpD& source) {
-    std::vector<double> out;
+std::vector<Real_b> PMA::ComputeResiduals(QTM::QuadTreeMesh& mesh, DvD& solution, SpD& source) {
+    std::vector<Real_b> out;
 
     // get quadrature weights
 
@@ -520,10 +520,10 @@ std::vector<double> PMA::ComputeResiduals(QTM::QuadTreeMesh& mesh, DvD& solution
     return out;
 }
 
-// std::vector<std::shared_ptr<QTM::Cell>> PMA::TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, double residualLimit) {
+// std::vector<std::shared_ptr<QTM::Cell>> PMA::TestResiduals(DvD& solution, QTM::QuadTreeMesh& mesh, Real_b residualLimit) {
 //     std::vector<std::shared_ptr<QTM::Cell>> out; out.reserve(mesh.leaves.size());
 //     for (auto leaf : mesh.leaves) {
-//         double res = ComputeResidual();
+//         Real_b res = ComputeResidual();
 //         if (leaf->level < 5 && ComputeResidual() > residualLimit) {
 //              out.push_back(leaf);
 //         }
@@ -533,19 +533,19 @@ std::vector<double> PMA::ComputeResiduals(QTM::QuadTreeMesh& mesh, DvD& solution
 // }
 
 DvD PMA::EvalSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, std::vector<std::vector<int>>& boundaryNodes, std::vector<int>& allBoundaryNodes, std::vector<std::string>& strs) {
-    std::vector<std::array<double,2>> boundaryNodePos;
+    std::vector<std::array<Real_b,2>> boundaryNodePos;
     for (auto bNodes : boundaryNodes) {
-        auto nodePos = inputMesh.GetNodePos(bNodes);
+        std::vector<std::array<Real_b,2>> nodePos = inputMesh.GetNodePos(bNodes);
         boundaryNodePos.insert(boundaryNodePos.end(), nodePos.begin(), nodePos.end());
     }
     int numBoundaryNodes = allBoundaryNodes.size();
 
     // Boundary nodes are given in clockwise order, not column-major order
-    std::vector<double> boundaryNodeValues; 
+    std::vector<Real_b> boundaryNodeValues; 
     boundaryNodeValues.reserve(numBoundaryNodes);
 
-    std::vector<double> boundaryCalc;
-    std::array<double,2> *currPointer = boundaryNodePos.data();
+    std::vector<Real_b> boundaryCalc;
+    std::array<Real_b,2> *currPointer = boundaryNodePos.data();
     int ptrIncr;
     std::string prompt;
 
@@ -576,8 +576,8 @@ void PMA::GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
     std::sort(boundaryNodes.begin(), boundaryNodes.end());
     std::sort(freeNodes.begin(), freeNodes.end());
 
-    std::vector<Eigen::Triplet<double>> tripletListNS;
-    std::vector<Eigen::Triplet<double>> tripletListCS;
+    std::vector<Eigen::Triplet<Real_b>> tripletListNS;
+    std::vector<Eigen::Triplet<Real_b>> tripletListCS;
     tripletListNS.reserve(boundaryNodes.size());
     tripletListCS.reserve(freeNodes.size());
 
@@ -597,19 +597,19 @@ void PMA::GetExtensionMatrices(QTM::QuadTreeMesh& inputMesh,
 //     using namespace Eigen;
 //     Eigen::JacobiSVD<SpD> svd(mat);
 
-//     double cond = svd.singularValues()(0) 
+//     Real_b cond = svd.singularValues()(0) 
 //     / svd.singularValues()(svd.singularValues().size()-1);
 
 //     std::cout << "Condition number: " << cond << std::endl;
 // }
 
 void PMA::FindRank(SpD& mat) {
-    Eigen::SparseQR<Eigen::SparseMatrix<double>, Eigen::COLAMDOrdering<int>> qr;
+    Eigen::SparseQR<Eigen::SparseMatrix<Real_b>, Eigen::COLAMDOrdering<int>> qr;
     qr.compute(mat);
 
     // Count the number of non-zero (or significant) diagonal elements in R
     int rank = 0;
-    double tol = 1e-10; // Tolerance for considering an element as non-zero
+    Real_b tol = 1e-10; // Tolerance for considering an element as non-zero
     for(int i = 0; i < qr.matrixR().rows(); ++i) {
         if (std::abs(qr.matrixR().coeff(i, i)) > tol) {
             rank++;
@@ -650,11 +650,11 @@ DvD PMA::ComputeSolutionStationaryLinear(SpD& StiffnessMatrix, DvD& fVec, SpD& c
 }
 
 DvD PMA::PoissonSolve(QTM::QuadTreeMesh& inputMesh,
-                double c,
-                double k,
+                Real_b c,
+                Real_b k,
                 std::string source,
                 std::vector<std::string> bcs,
-                double penaltyParam) {
+                Real_b penaltyParam) {
     
     auto boundaryNodes = inputMesh.boundaryNodes;
     std::vector<int> freeNodes = inputMesh.freeNodes;
@@ -738,10 +738,10 @@ PMA::quadUtils PMA::GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
     int numElemNodes = mesh.numElemNodes;
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
-    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<Real_b> gaussPoints = Utils::genGaussPoints(deg);
 
     // get quad weights in 1D
-    std::vector<double> integX = Utils::integrateLagrange(gaussPoints);
+    std::vector<Real_b> integX = Utils::integrateLagrange(gaussPoints);
 
     // Convert 1D quad weights to diag matrix
     Eigen::Map<DvD> integXMat(integX.data(),numNodes);
@@ -754,12 +754,12 @@ PMA::quadUtils PMA::GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
     DD Bs; Bs.setIdentity(numNodes, numNodes);
 
     // Generate derivative matrix
-    std::vector<double> AInitializer; 
+    std::vector<Real_b> AInitializer; 
     AInitializer.reserve(numNodes * numNodes);
 
     // Generate derivatives for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
-        std::vector<double> xPartials = Utils::numDeriv(.00001, k, gaussPoints, gaussPoints);
+        std::vector<Real_b> xPartials = Utils::numDeriv(.00001, k, gaussPoints, gaussPoints);
         AInitializer.insert(AInitializer.end(), xPartials.begin(), xPartials.end());
     }
     
@@ -772,7 +772,7 @@ PMA::quadUtils PMA::GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
     combinedY << Eigen::kroneckerProduct(A, B);
 
     // get basis func vals for split cell quad
-    std::vector<double> BhInitializer; 
+    std::vector<Real_b> BhInitializer; 
     BhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // get unit vecs
@@ -786,7 +786,7 @@ PMA::quadUtils PMA::GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
 
     // Generate values for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
-        std::vector<double> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
+        std::vector<Real_b> xVals = Utils::evalLagrangeInterp(k, mesh.halfGaussPoints, mesh.gaussPoints);
         BhInitializer.insert(BhInitializer.end(), xVals.begin(), xVals.end());
     }
 
@@ -803,12 +803,12 @@ PMA::quadUtils PMA::GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
     splitCellPlaceholder << Eigen::kroneckerProduct(Bh, topVec); splitCellVals[3] = splitCellPlaceholder;
 
     // get basis func gradients for split cell quad
-    std::vector<double> AhInitializer; 
+    std::vector<Real_b> AhInitializer; 
     AhInitializer.reserve((mesh.halfGaussPoints.size()) * numNodes);
 
     // Generate derivatives for each basis function, copy to full array
     for (int k=0; k<numNodes; k++) { 
-        std::vector<double> xPartials = Utils::numDeriv(.00001, k, mesh.halfGaussPoints, gaussPoints);
+        std::vector<Real_b> xPartials = Utils::numDeriv(.00001, k, mesh.halfGaussPoints, gaussPoints);
         AhInitializer.insert(AhInitializer.end(), xPartials.begin(), xPartials.end());
     }
     
@@ -843,8 +843,8 @@ PMA::quadUtils PMA::GenerateAssemblyPackage(QTM::QuadTreeMesh& mesh) {
 
     std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
 
-    double normalX[4] = {0,1,0,-1};
-    double normalY[4] = {1,0,-1,0};
+    Real_b normalX[4] = {0,1,0,-1};
+    Real_b normalY[4] = {1,0,-1,0};
 
     std::vector<QTM::Direction> directions = {QTM::Direction::N, QTM::Direction::E, 
                                                 QTM::Direction::S, QTM::Direction::W};

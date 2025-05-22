@@ -13,8 +13,10 @@ int main(int argc, char* argv[]) {
     int nx;
     int ny;
     int deg;
-    double Lx;
-    double Ly;
+    Real_b Lx;
+    Real_b Ly;
+
+    // static_assert(sizeof(Real_b) == 4);
 
     std::cout<<"\n-----------------------------------\n";
     std::cout<<"| Initializing dG Poisson problem |";
@@ -23,7 +25,7 @@ int main(int argc, char* argv[]) {
     nx = std::stoi(argv[2]); ny = std::stoi(argv[3]); deg = std::stoi(argv[1]);
     Lx = std::stod(argv[4]); Ly = std::stod(argv[5]);
 
-    double penalty = std::stod(argv[6]); 
+    Real_b penalty = std::stod(argv[6]); 
 
     std::string source = argv[7];
 
@@ -81,12 +83,12 @@ int main(int argc, char* argv[]) {
 
     QuadTreeMesh mesh(deg, nx, ny, Lx, Ly);         
 
-    double c = 1;
-    double k = 1;
+    Real_b c = 1;
+    Real_b k = 1;
 
     DvD z = PMA::dgPoissonSolve(mesh, k, source, essentialBC, naturalBC, dbcs, nbcs, penalty, 0, numThreads);
 
-    std::vector<std::array<double,2>> allNodePos = mesh.nodePositions;
+    std::vector<std::array<Real_b,2>> allNodePos = mesh.nodePositions;
 
     std::ofstream fileOut("outputdG.txt");
 
@@ -94,8 +96,8 @@ int main(int argc, char* argv[]) {
     if (fileOut.is_open()) {
         for (size_t i = 0; i < allNodePos.size(); ++i) {
             // Extract x and y from the coordinates vector
-            double x = allNodePos[i][0];
-            double y = allNodePos[i][1];
+            Real_b x = allNodePos[i][0];
+            Real_b y = allNodePos[i][1];
 
             // Write x, y, and z to the file separated by commas
             fileOut << x << "," << y << "," << z(i) << std::endl;

@@ -1,9 +1,9 @@
 #include "../include/MatrixAssembly.hpp"
 
-SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k, 
+SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, Real_b k, 
                 std::vector<bool> isDirichletBC,
                 std::vector<std::string> dbcs,
-                double alpha, 
+                Real_b alpha, 
                 PMA::quadUtils& package) {
     // Integral on Dirichlet boundaries of: (a/h)*[u][v] - {k * grad(u) dot n}[v] - {k * grad(v) dot n}[u]
     int deg = mesh.deg;
@@ -41,14 +41,14 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
 
     std::vector<int> splitIdx[2] = { frontIdxs, backIdxs };
 
-    double normalX[4] = {0,1,0,-1};
-    double normalY[4] = {1,0,-1,0};
+    Real_b normalX[4] = {0,1,0,-1};
+    Real_b normalY[4] = {1,0,-1,0};
 
     std::vector<int> boundaryNodes;
     std::vector<int> elemNodes;
     std::vector<int> elemLocals;
     std::vector<std::shared_ptr<QTM::Cell>> neighbors;
-    std::vector<Eigen::Triplet<double>> tripletList; 
+    std::vector<Eigen::Triplet<Real_b>> tripletList; 
     auto leaves = mesh.GetAllCells();
 
     std::vector<std::shared_ptr<QTM::Cell>> dirichletCells; 
@@ -67,8 +67,8 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
                 elemLocals = mesh.GetTrimmedLocalNodes(cell->CID, elemNodes);
 
                 auto nodes = cell->nodes;
-                double jac = cell->width; // Jacobian factors
-                double penalty = alpha / jac / 2;
+                Real_b jac = cell->width; // Jacobian factors
+                Real_b penalty = alpha / jac / 2;
 
                 // jump matrix setup
                 DD topJump;
@@ -143,7 +143,7 @@ SpD PMA::BoundaryMatrix(QTM::QuadTreeMesh& mesh, double k,
 DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                         std::vector<bool> isDirichletBC,
                         std::vector<std::string> dbcs,
-                        double alpha, 
+                        Real_b alpha, 
                         PMA::quadUtils& package) {
     // do integral (v - n dot grad v) * u_D   over dirichlet boundary
     int deg = mesh.deg;
@@ -151,7 +151,7 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
     int numElemNodes = mesh.numElemNodes;
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
-    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<Real_b> gaussPoints = Utils::genGaussPoints(deg);
 
     std::vector<int> allBoundaryNodes;
 
@@ -182,11 +182,11 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
     std::vector<int> elemNodes;
     std::vector<int> elemLocals;
 
-    double normalX[4] = {0,1,0,-1};
-    double normalY[4] = {1,0,-1,0};
+    Real_b normalX[4] = {0,1,0,-1};
+    Real_b normalY[4] = {1,0,-1,0};
     int dbcIdx = 0;
 
-    std::vector<Eigen::Triplet<double>> tripletList;
+    std::vector<Eigen::Triplet<Real_b>> tripletList;
     tripletList.reserve(nElements * numElemNodes);
 
     for (int i=0; i<isDirichletBC.size(); i++) {
@@ -214,10 +214,10 @@ DvD PMA::IntegrateDirichlet(QTM::QuadTreeMesh& mesh,
                 elemLocals = mesh.GetTrimmedLocalNodes(cell->CID, elemNodes);
 
                 auto nodes = cell->nodes;
-                double jac = cell->width; // Jacobian factors
-                double penalty = alpha / cell->width / 2;
+                Real_b jac = cell->width; // Jacobian factors
+                Real_b penalty = alpha / cell->width / 2;
 
-                std::vector<double> collectSourceVals; collectSourceVals.reserve(numNodes);
+                std::vector<Real_b> collectSourceVals; collectSourceVals.reserve(numNodes);
                 collectSourceVals.insert(collectSourceVals.begin(), dirichletIdx, dirichletIdx+numNodes);
                 dirichletIdx += numNodes;
 
@@ -276,7 +276,7 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
     int numElemNodes = mesh.numElemNodes;
     int nElements = mesh.numLeaves;
     int nNodes = mesh.nNodes();
-    std::vector<double> gaussPoints = Utils::genGaussPoints(deg);
+    std::vector<Real_b> gaussPoints = Utils::genGaussPoints(deg);
 
     // load package data
     DD quadWeights1D = package.quadWeights1D;
@@ -294,7 +294,7 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
                                    QTM::Direction::W};
     
     // Initialize i,j,v triplet list for sparse matrix
-    std::vector<Eigen::Triplet<double>> tripletList;
+    std::vector<Eigen::Triplet<Real_b>> tripletList;
     tripletList.reserve(nElements * numElemNodes);
 
     std::vector<std::vector<int>> localNodes = {mesh.GetLocalBoundaryNodes(QTM::Direction::N),
@@ -302,7 +302,7 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::S),
                                                 mesh.GetLocalBoundaryNodes(QTM::Direction::W)};
 
-    double a; // penalty parameters
+    Real_b a; // penalty parameters
 
     std::vector<int> elemNodes;
     std::vector<int> elemLocals;
@@ -330,10 +330,10 @@ DvD PMA::IntegrateNeumann(QTM::QuadTreeMesh& mesh,
             for (const auto& elm : neumannCells) {
                 elemNodes = mesh.GetGlobalElemNodes(elm->CID);
                 elemLocals = mesh.GetTrimmedLocalNodes(elm->CID, elemNodes);
-                double jac = elm->width; // Jacobian factors
+                Real_b jac = elm->width; // Jacobian factors
                 // calculate local matrix
                 auto nodes = elm->nodes;
-                std::vector<double> collectSourceVals; collectSourceVals.reserve(numElemNodes);
+                std::vector<Real_b> collectSourceVals; collectSourceVals.reserve(numElemNodes);
                 collectSourceVals.insert(collectSourceVals.begin(), neumannIdx, neumannIdx+numNodes);
                 neumannIdx += numNodes;
 
@@ -378,14 +378,14 @@ DvD PMA::ComputeSolutionStationaryLinearNoElim(SpD& A, DvD& b) {
 }
 
 DvD PMA::dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
-                double k,
+                Real_b k,
                 std::string source,
                 std::vector<bool> isDirichletBC,
                 std::vector<bool> isNeumannBC,
                 std::vector<std::string> dbcs,
                 std::vector<std::string> nbcs,
-                double penaltyParam,
-                double dirichletPenalty,
+                Real_b penaltyParam,
+                Real_b dirichletPenalty,
                 uint64_t numThreads) {
     
     auto boundaryNodes = inputMesh.boundaryNodes;
@@ -404,7 +404,7 @@ DvD PMA::dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
 
     PMA::quadUtils package = PMA::GenerateAssemblyPackage(inputMesh);
 
-    double nNodesD = (double)nNodes;
+    Real_b nNodesD = (Real_b)nNodes;
 
     std::cout<<"Assembling stiffness matrix"<<std::endl;
     SpD KMatrix = PMA::StiffnessMatrix(inputMesh, k);
@@ -418,7 +418,7 @@ DvD PMA::dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
     std::cout<<"Assembling overall system matrix"<<std::endl;
     SpD StiffnessMatrix = KMatrix + PMatrix - SMatrix - SMatrixT + Miscellaneous;
 
-    double tol = 1e-14;
+    Real_b tol = 1e-14;
 
     uint64_t totalNZ = 0;
 
@@ -431,6 +431,9 @@ DvD PMA::dgPoissonSolve(QTM::QuadTreeMesh& inputMesh,
     }
 
     DEBUG_PRINT("actual nnz: ", totalNZ / nNodesD);
+    DEBUG_PRINT("effective nnz: ", StiffnessMatrix.nonZeros() / nNodesD);
+
+    // auto t = StiffnessMatrix.nonZeros();
 
     std::cout<<"Assembling RHS vector"<<std::endl;
     DvD FMatrix = PMA::AssembleFVec(inputMesh, 1.0, source);
