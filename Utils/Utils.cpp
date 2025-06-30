@@ -1,4 +1,4 @@
-#include "Utils.hpp"
+#include <Utils/Utils.hpp>
 
 std::vector<Real_b> Utils::genGaussPoints(int degree) {
     std::vector<Real_b> gaussPoints;
