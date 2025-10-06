@@ -1,26 +1,26 @@
-#include "../../Diffusion/include/MatrixAssembly.hpp"
+#include <Utils/Utils.hpp>
 
 #ifndef MatrixAssembly_NS
 #define MatrixAssembly_NS
 
 // Incompressible
 namespace NSMA {
-    SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
-    // "proper" formulation
-    SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir); // c3i
-    SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir); // bi3
+    // SpD PVMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
+    // // "proper" formulation
+    // SpD PressureJumpMatrix(QTM::QuadTreeMesh& mesh, int diffDir); // c3i
+    // SpD PressureAvgMatrix(QTM::QuadTreeMesh& mesh, int diffDir); // bi3
 
-    SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::quadUtils& package);
-    SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package);
+    // SpD PenaltyMatrix(QTM::QuadTreeMesh& mesh, double k, double alpha, PMA::quadUtils& package);
+    // SpD FluxMatrix(QTM::QuadTreeMesh& mesh, double k, PMA::quadUtils& package);
 
-    // "bad" formulation
-    SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
+    // // "bad" formulation
+    // SpD PressureFluxMatrix(QTM::QuadTreeMesh& mesh, int diffDir);
 
-    // 3,3 block
-    SpD PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu);
+    // // 3,3 block
+    // SpD PressurePenaltyMatrix(QTM::QuadTreeMesh& mesh, double mu);
 
-    SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&& P);
-    SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state);
+    // SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD&& U, DvD&& V, DvD&& P);
+    // SpD ConvectionMatrix(QTM::QuadTreeMesh& mesh, double rho, DvD& state);
 
     SpD GeneralizedNeumannBC(QTM::QuadTreeMesh& mesh, double mu);
     DvD EvalPartialSymbolicBoundaryCond(QTM::QuadTreeMesh& inputMesh, 

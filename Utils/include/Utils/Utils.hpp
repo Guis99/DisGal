@@ -5,6 +5,7 @@
 #include <cmath>
 #include <string>
 
+#include <Utils/common.hpp>
 #include <MathParser/MathParser.hpp>
 
 #define PI 3.1415926535897932384
@@ -13,14 +14,6 @@
 #define UTILS
  
 // #define USE_SINGLE_PRECISION
-
-#ifdef USE_SINGLE_PRECISION
-using Real_b = float;
-static_assert(sizeof(Real_b) == 4);
-#else
-using Real_b = double;
-static_assert(sizeof(Real_b) == 8);
-#endif
  
 namespace Utils {
     std::vector<Real_b> evalLagrangeInterp(int k, std::vector<Real_b> evalPoints, std::vector<Real_b> &gaussPoints);

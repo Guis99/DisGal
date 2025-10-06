@@ -35,7 +35,7 @@ numBoundaries = 4
 btm = {"1":"0", "0":"1"} # if bc is not one, it has to be the other
 
 ess = ["1","1","1","1"] # "1" means that a boundary is Dirichlet (essential), "0" means that it is Neumann (natural)
-ess = ["1","0","1","0"]
+# ess = ["1","0","1","0"]
 nat = [btm[bc] for bc in ess]
 
 dirichletBC = ["sin(5*pi*x)", "-sin(pi*y)", "sin(pi*x)", "-sin(2*pi*y)"]

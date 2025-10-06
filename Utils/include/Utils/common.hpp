@@ -1,6 +1,24 @@
 #ifndef DISGAL_COMMON_INCLUDE
 #define DISGAL_COMMON_INCLUDE
 
+#include <QTM/include/QTM.hpp>
+#include <Eigen/Core>
+#include <Eigen/Sparse>
+#include <unsupported/Eigen/KroneckerProduct>
+
+#ifdef USE_SINGLE_PRECISION
+    using Real_b = float;
+    static_assert(sizeof(Real_b) == 4);
+#else
+    using Real_b = double;
+    static_assert(sizeof(Real_b) == 8);
+#endif
+
+typedef std::vector<Eigen::Triplet<Real_b>> TrDV; // Vector of Real_b triplets for initializing sparse matrices
+typedef Eigen::SparseMatrix<Real_b> SpD; // Dynamically-sized matrix of Real_b
+typedef Eigen::Matrix<Real_b, Eigen::Dynamic, Eigen::Dynamic> DD; // Dynamically-sized vector of Real_b
+typedef Eigen::Matrix<Real_b, Eigen::Dynamic, 1> DvD;
+
 #ifndef VARIADIC_PRINT
 #define VARIADIC_PRINT
 template<typename... Args>
